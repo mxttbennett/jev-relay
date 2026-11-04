@@ -2,8 +2,8 @@
 import { loadConfig } from "../src/config.mjs";
 import { defaultDeps } from "../src/deps.mjs";
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { sendNotification } from "../src/notify.mjs";
+import { notifyCommand } from "../src/notify.mjs";
+import { sessionTitle } from "../src/transcripts.mjs";
 import { handlePrompt } from "../src/relay.mjs";
 
 const agent = process.argv[2] ?? "claude";
@@ -21,11 +21,9 @@ try {
   });
   if (advice) {
     if (config.macNotifications && advice.notice) {
-      await sendNotification({
-        message: advice.notice,
-        readTranscript: () => readFileSync(input.transcript_path, "utf8"),
-        run: ([cmd, ...args]) => new Promise((done) => execFile(cmd, args, { timeout: 3000 }, () => done())),
-      });
+      const title = sessionTitle(input.transcript_path) || "jev-relay";
+      const [cmd, ...args] = notifyCommand(advice.notice, title);
+      execFile(cmd, args, { timeout: 3000 }, () => {});
     }
     const output = { systemMessage: advice.notice };
     if (advice.context) {
