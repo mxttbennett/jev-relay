@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { runChain } from "../src/chain.mjs";
 import { DEFAULTS, isEnabled, loadConfig, merge, repoClass } from "../src/config.mjs";
+import { resolveConfig } from "../src/defaults.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
 import { parseVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
@@ -191,4 +192,17 @@ test("an invalid heavy pattern is ignored instead of breaking the gate", () => {
 
 test("heuristics call a heavy slash command a subagent task once the gate is open", () => {
   assert.equal(heuristicVerdict({ prompt: "/deep-plan x", contextTokens: 60000, idleMs: 0 }, gate).placement, "subagent");
+});
+
+test("the status notice is on by default and a user config can turn it off", () => {
+  // Arrange
+  const user = { statusNotice: false };
+
+  // Act
+  const defaults = resolveConfig();
+  const overridden = resolveConfig(user);
+
+  // Assert
+  assert.equal(defaults.statusNotice, true);
+  assert.equal(overridden.statusNotice, false);
 });

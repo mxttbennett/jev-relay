@@ -116,6 +116,12 @@ jev-relay band on
 jev-relay band off
 ```
 
+## Status notice
+
+The mod prints `jev → haiku · 0.98` in the status area when it picks a model. Turn it off with
+`"statusNotice": false` in `~/.config/jev-relay/config.json`. The status line's model slot still
+shows the routed model.
+
 ## Toggle
 
 ```bash

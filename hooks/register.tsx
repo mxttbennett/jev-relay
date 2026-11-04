@@ -64,6 +64,16 @@ const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable
 
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
+async function publish($: EngineInterface, status: Record<string, unknown>) {
+  try {
+    const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
+    const id = (await $.session.id()).replace(/[^\w-]/g, '')
+    await $.fs.write(`${tmp}/jev-claude/${id}.json`, JSON.stringify(status))
+  } catch {
+    // The status line is cosmetic and must never interfere with a turn.
+  }
+}
+
 async function decide($: EngineInterface, prompt: string): Promise<Decision | null> {
   const providers = createProviders(state.config, {
     config: state.config,
@@ -85,7 +95,7 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
   if (result.heuristic || !result.verdict.model) return null
   state.latest = result.verdict
   const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
-  await $.ui.status(`jev → ${result.verdict.model}${confidence}`)
+  if (state.config.statusNotice) await $.ui.status(`jev → ${result.verdict.model}${confidence}`)
   return result.verdict
 }
 
@@ -120,6 +130,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await load($)
+    state.baseline = await $.session.model()
     return next(e)
   })
 
@@ -128,9 +139,9 @@ export const register: Register = on => {
     if (e.agentId || state.isManual || !isOn() || e.text.trim() === '') return result
 
     const sessionModel = await $.session.model()
-    state.baseline ??= sessionModel
     if (sessionModel !== state.baseline) {
       state.isManual = true
+      await publish($, { manual: true })
       return result
     }
     const pending = decide($, e.text).catch(() => null)
@@ -150,11 +161,17 @@ export const register: Register = on => {
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId !== undefined || state.isManual || !isOn()) return yield* next(e)
+    if (e.agentId !== undefined || state.isManual) return yield* next(e)
+    if (!isOn()) {
+      if (e.index === 0) void publish($, {})
+      return yield* next(e)
+    }
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
-    return yield* next(decision?.placement === 'inline' && decision.model ? { ...e, model: decision.model } : e)
+    const model = decision?.placement === 'inline' ? decision.model : null
+    if (e.index === 0) void publish($, model ? { tier: model, model } : {})
+    return yield* next(model ? { ...e, model } : e)
   })
 
   on('turn.complete', async ($, e, next) => {
