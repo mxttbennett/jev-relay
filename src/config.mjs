@@ -5,11 +5,27 @@ import { join } from "node:path";
 
 export const CONFIG_PATH = join(homedir(), ".config", "jev-relay", "config.json");
 
+const FAST = "Quick lookups, formatting, boilerplate, low-stakes small edits";
+const BALANCED = "Default day-to-day coding, feature work, most agentic building";
+const STRONG =
+  "Architecture decisions, hard debugging, security-sensitive work, large multi-file refactors, complex planning";
+
+const CLAUDE_MODELS = { haiku: FAST, sonnet: BALANCED, opus: STRONG };
+const CODEX_MODELS = { "gpt-6-luna": FAST, "gpt-6.1-terra": BALANCED, "gpt-6.1-sol": STRONG };
+
+const KNOWN_MODELS = { ...CLAUDE_MODELS, ...CODEX_MODELS };
+
+export function describeModels(models) {
+  const entries = Array.isArray(models) ? models.map((name) => [name, ""]) : Object.entries(models);
+  return Object.fromEntries(entries.map(([name, why]) => [name, why || KNOWN_MODELS[name] || ""]));
+}
+
 export const DEFAULTS = {
   agents: { claude: { enabled: true }, codex: { enabled: true } },
   gate: { contextTokens: 100000, cacheTtlMs: 300000, coldMinTokens: 20000 },
   cooldown: { prompts: 3, growth: 0.25 },
   personalRemotePatterns: ["mxttbennett", "github-personal"],
+  models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
   redact: { names: [] },
   chains: {
     work: ["qwen-pc", "qwen", "heuristics"],
@@ -47,7 +63,10 @@ export function loadConfig(path = CONFIG_PATH) {
   try {
     user = JSON.parse(readFileSync(path, "utf8"));
   } catch {}
-  return merge(DEFAULTS, user);
+  const config = merge(DEFAULTS, user);
+  const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
+  config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
+  return config;
 }
 
 export function isEnabled(config, agent, env = process.env) {

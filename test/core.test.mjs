@@ -42,12 +42,12 @@ test("heuristics nudge only on a clear signal", () => {
 });
 
 test("parseVerdict reads JSON inside prose and rejects bad enums", () => {
-  assert.deepEqual(parseVerdict('ok {"placement":"subagent","model":"haiku","confidence":0.8}'), {
+  assert.deepEqual(parseVerdict('ok {"placement":"subagent","model":"haiku","confidence":0.8}', { haiku: "d" }), {
     placement: "subagent",
     model: "haiku",
     confidence: 0.8,
   });
-  assert.throws(() => parseVerdict('{"placement":"elsewhere","model":"haiku"}'));
+  assert.throws(() => parseVerdict('{"placement":"elsewhere","model":"haiku"}', { haiku: "d" }));
   assert.throws(() => parseVerdict("no json"));
 });
 
@@ -94,7 +94,7 @@ test("jev provider tries OpenRouter then TypeSafe and accepts JEV_API_KEY", asyn
   };
   const env = { OPENROUTER_API_KEY: "a", JEV_API_KEY: "b" };
   const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env, fetch });
-  assert.deepEqual(await jev.run({ text: "x" }), { placement: "sibling", model: "opus", confidence: 0.9 });
+  assert.deepEqual(await jev.run({ text: "x", models: { opus: "d" } }), { placement: "sibling", model: "opus", confidence: 0.9 });
   assert.equal(calls.length, 2);
   assert.ok(calls[1].includes("typesafe"));
 });
@@ -106,7 +106,7 @@ test("ollama provider sends think:true and reads message.content", async () => {
     return { ok: true, json: async () => ({ message: { content: '{"placement":"inline","model":"sonnet"}' } }) };
   };
   const providers = createProviders(DEFAULTS, { config: DEFAULTS, env: {}, fetch });
-  const verdict = await providers["qwen-pc"].run({ text: "user: hi" });
+  const verdict = await providers["qwen-pc"].run({ text: "user: hi", models: { sonnet: "d" } });
   assert.equal(body.think, true);
   assert.equal(body.model, "bonsai-2:27b");
   assert.equal(verdict.model, "sonnet");

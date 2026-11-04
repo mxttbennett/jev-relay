@@ -39,6 +39,24 @@ Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relay/
 { "chains": { "work": ["qwen", "heuristics"] }, "redact": { "names": ["Acme"] } }
 ```
 
+`models` lists the models the classifier may pick, with a separate list for each agent. Write a
+list of names, from weakest to strongest. Known models borrow their built-in description, which the
+classifier reads to choose. Delete a name to disallow it. A list you write replaces that agent's
+default list, so name every model you want to keep.
+
+```json
+{ "models": { "claude": ["haiku", "sonnet"], "codex": ["gpt-6-luna"] } }
+```
+
+A model the built-ins don't know needs a description, so write that agent's list as an object:
+`{ "gpt-x": "what it is good for" }`.
+
+Defaults: Claude allows `haiku`, `sonnet` and `opus`; Codex allows `gpt-6-luna`, `gpt-6.1-terra` and
+`gpt-6.1-sol`. If the classifier answers with a model that is not on the list, that provider's answer
+is rejected and the next provider in the chain runs. An agent with an empty list gets no model
+question. The sibling nudge carries the chosen model: `claude --bg --model <name>` or
+`codex exec -m <name>`.
+
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,
 `TYPESAFE_API_KEY` or `JEV_API_KEY`.
 

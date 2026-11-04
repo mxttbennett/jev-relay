@@ -12,10 +12,11 @@ const MODEL_TTL_MS = 10 * 60 * 1000;
 export async function classify(signals, config, deps) {
   const cls = repoClass(config, signals.cwd, deps.remoteOf);
   const { text, hits } = redact(signals.text, config.redact.names);
+  const models = config.models[signals.agent] ?? {};
   const names = config.chains[cls].filter(
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
-  const result = await runChain(names, deps.providers, { ...signals, text: text.slice(-TEXT_CHARS) });
+  const result = await runChain(names, deps.providers, { ...signals, models, text: text.slice(-TEXT_CHARS) });
   return { result, cls, hits };
 }
 
@@ -51,6 +52,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
     {
       text: excerptOf(snapshot.turns, input.prompt),
       prompt: input.prompt,
+      agent,
       contextTokens,
       idleMs,
       cwd: input.cwd,
@@ -101,7 +103,7 @@ export async function pickSubagentModel({ input, agent, config, deps }) {
   if (state.model && deps.now() - state.model.at < MODEL_TTL_MS) return state.model.value;
 
   const { result, cls, hits } = await classify(
-    { text: `user: ${tool.prompt.slice(0, TURN_CHARS)}`, prompt: tool.prompt, contextTokens: 0, idleMs: 0, cwd: input.cwd },
+    { text: `user: ${tool.prompt.slice(0, TURN_CHARS)}`, prompt: tool.prompt, agent, contextTokens: 0, idleMs: 0, cwd: input.cwd },
     config,
     deps,
   );
