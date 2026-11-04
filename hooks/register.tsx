@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isEnabled, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
-import { decisionLabel, isChange, notifyCommand, titleFromTranscript } from '../src/notify.mjs'
+import { decisionLabel, isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, classifyFields } from '../src/relay.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
@@ -109,12 +109,13 @@ async function record($: EngineInterface, entry: Record<string, unknown>) {
 
 async function notify($: EngineInterface, message: string) {
   const home = (await $.env.get('HOME')) ?? ''
-  const cwd = await $.session.cwd()
-  const id = await $.session.id()
-  const transcript = `${home}/.claude/projects/${cwd.replace(/[^a-zA-Z0-9]/g, '-')}/${id}.jsonl`
-  const title = titleFromTranscript((await $.fs.read(transcript).catch(() => '')).slice(-1_000_000))
-  const [cmd, ...args] = notifyCommand(message, title || 'jev-relay')
-  await $.process.run([cmd, ...args], { timeoutMs: 3000 }).catch(() => {})
+  const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${home}/.claude`
+  const path = transcriptPath({ configDir, cwd: await $.session.cwd(), id: await $.session.id() })
+  await sendNotification({
+    message,
+    readTranscript: () => $.fs.read(path),
+    run: argv => $.process.run(argv, { timeoutMs: 3000 }),
+  })
 }
 
 async function decide($: EngineInterface, prompt: string, trigger: string): Promise<Decision | null> {
