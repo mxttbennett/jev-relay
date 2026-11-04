@@ -63,6 +63,7 @@ async function remoteOf($: EngineInterface, cwd: string) {
 
 const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI/i.test(String(err))
 
+const EFFORTS = ['low', 'medium', 'high']
 const TIERS = ['haiku', 'sonnet', 'opus']
 const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
 
@@ -96,10 +97,11 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
     cwd,
   }
   const { result } = await classify(signals, state.config, { providers, remoteOf: () => remote })
-  if (result.heuristic || !result.verdict.model) return null
+  if (result.heuristic || (!result.verdict.model && !result.verdict.effort)) return null
   state.latest = result.verdict
   const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
-  if (state.config.statusNotice) await $.ui.status(`jev → ${result.verdict.model}${confidence}`)
+  const label = [result.verdict.model, result.verdict.effort].filter(Boolean).join(' · ')
+  if (state.config.statusNotice) await $.ui.status(`jev → ${label}${confidence}`)
   return result.verdict
 }
 
@@ -176,8 +178,9 @@ export const register: Register = on => {
     const current = await $.session.model()
     const picked = decision?.placement === 'inline' ? decision.model : null
     const model = picked && tierOf(picked) !== tierOf(current) ? picked : null
-    const effort = model && e.effort !== undefined ? decision?.effort : null
-    const stream = next(model ? { ...e, model, ...(effort && { effort }) } : e)
+    const wanted = decision?.placement === 'inline' ? decision.effort : null
+    const effort = wanted && EFFORTS.includes(wanted) && e.effort !== undefined ? wanted : null
+    const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)
     for await (const chunk of stream) {
       if (e.index === 0 && chunk.kind === 'stop') {
         const served = chunk.usage?.model

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { DEFAULTS, loadConfig, merge } from "../src/config.mjs";
+import { resolveConfig } from "../src/defaults.mjs";
 import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
 import { classify, handlePrompt as run } from "../src/relay.mjs";
@@ -154,4 +155,14 @@ test("a low-confidence verdict drops its effort along with its model", async () 
 
   // Assert
   assert.deepEqual(result.verdict, { placement: "inline", model: null, effort: null, confidence: 0.2 });
+});
+
+test("a user efforts list replaces the default list, and an empty one stops the effort question", () => {
+  // Act
+  const subset = resolveConfig({ efforts: { low: "quick" } });
+  const none = resolveConfig({ efforts: {} });
+
+  // Assert
+  assert.deepEqual(subset.efforts, { low: "quick" });
+  assert.deepEqual(none.efforts, {});
 });
