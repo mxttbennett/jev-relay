@@ -46,6 +46,7 @@ test("parseVerdict reads JSON inside prose and rejects bad enums", () => {
   assert.deepEqual(parseVerdict('ok {"placement":"subagent","model":"haiku","confidence":0.8}', { haiku: "d" }), {
     placement: "subagent",
     model: "haiku",
+    effort: null,
     confidence: 0.8,
   });
   assert.throws(() => parseVerdict('{"placement":"elsewhere","model":"haiku"}', { haiku: "d" }));
@@ -106,7 +107,7 @@ test("jev provider tries OpenRouter then TypeSafe and accepts JEV_API_KEY", asyn
   };
   const env = { OPENROUTER_API_KEY: "a", JEV_API_KEY: "b" };
   const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env, fetch });
-  assert.deepEqual(await jev.run({ text: "x", models: { opus: "d" } }), { placement: "sibling", model: "opus", confidence: 0.9 });
+  assert.deepEqual(await jev.run({ text: "x", models: { opus: "d" } }), { placement: "sibling", model: "opus", effort: null, confidence: 0.9 });
   assert.equal(calls.length, 2);
   assert.ok(calls[1].includes("typesafe"));
 });

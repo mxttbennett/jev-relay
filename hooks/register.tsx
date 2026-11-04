@@ -5,7 +5,8 @@ import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { classify } from '../src/relay.mjs'
 
-type Decision = { placement: string; model: string | null; confidence: number | null }
+type Effort = 'low' | 'medium' | 'high'
+type Decision = { placement: string; model: string | null; effort: Effort | null; confidence: number | null }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -170,8 +171,9 @@ export const register: Register = on => {
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
     const model = decision?.placement === 'inline' ? decision.model : null
-    if (e.index === 0) void publish($, model ? { tier: model, model } : {})
-    return yield* next(model ? { ...e, model } : e)
+    const effort = model && e.effort !== undefined ? decision?.effort : null
+    if (e.index === 0) void publish($, model ? { tier: model, model, effort } : {})
+    return yield* next(model ? { ...e, model, ...(effort && { effort }) } : e)
   })
 
   on('turn.complete', async ($, e, next) => {

@@ -96,3 +96,62 @@ test("a plain list of model names borrows the built-in descriptions; unknown nam
   assert.deepEqual(config.models.claude, { sonnet: DEFAULTS.models.claude.sonnet });
   assert.deepEqual(config.models.codex, { "gpt-6-luna": DEFAULTS.models.codex["gpt-6-luna"], "gpt-x": "my own model" });
 });
+
+const levels = { low: "little reasoning", high: "hard reasoning" };
+
+test("an effort outside the offered list is rejected, and none is kept when no efforts are listed", () => {
+  // Arrange
+  const reply = (effort) => ({ placement: "inline", model: "sonnet", effort });
+
+  // Act & Assert
+  assert.equal(toVerdict(reply("high"), two, levels).effort, "high");
+  assert.throws(() => toVerdict(reply("max"), two, levels), /bad effort/);
+  assert.equal(toVerdict(reply("high"), two, {}).effort, null);
+  assert.equal(parseVerdict('{"placement":"inline","model":"sonnet","effort":"low"}', two, levels).effort, "low");
+});
+
+test("the classifier is only asked about the listed efforts", () => {
+  // Act
+  const prompt = classifierPrompt({ text: "x", models: two, efforts: levels });
+  const questions = jevQuestions(two, levels);
+
+  // Assert
+  assert.match(prompt, /- high: hard reasoning/);
+  assert.match(prompt, /"effort":"\.\.\."/);
+  assert.deepEqual(questions.effort_choice.criteria, levels);
+  assert.equal(jevQuestions(two, {}).effort_choice, undefined);
+  assert.doesNotMatch(classifierPrompt({ text: "x", models: two, efforts: {} }), /effort/);
+});
+
+test("the jev provider reads the effort answer", async () => {
+  // Arrange
+  const fetch = async () => ({
+    ok: true,
+    json: async () => ({ answers: { placement: { choice: "inline" }, model_choice: { choice: "sonnet" }, effort_choice: { choice: "low" } } }),
+  });
+  const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env: { OPENROUTER_API_KEY: "k" }, fetch });
+
+  // Act
+  const verdict = await jev.run({ text: "x", models: two, efforts: levels });
+
+  // Assert
+  assert.equal(verdict.effort, "low");
+});
+
+test("defaults offer low, medium and high effort", () => {
+  // Act & Assert
+  assert.deepEqual(Object.keys(DEFAULTS.efforts), ["low", "medium", "high"]);
+});
+
+test("a low-confidence verdict drops its effort along with its model", async () => {
+  // Arrange
+  const verdict = { placement: "subagent", model: "haiku", effort: "high", confidence: 0.2 };
+  const providers = { jev: { remote: false, heuristic: false, run: async () => verdict } };
+  const config = merge(DEFAULTS, { chains: { work: ["jev"], personal: ["jev"] } });
+
+  // Act
+  const { result } = await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, { providers, remoteOf: () => "" });
+
+  // Assert
+  assert.deepEqual(result.verdict, { placement: "inline", model: null, effort: null, confidence: 0.2 });
+});

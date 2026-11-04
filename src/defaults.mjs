@@ -35,6 +35,11 @@ export const DEFAULTS = {
   report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
+  efforts: {
+    low: "Mechanical or lookup work that needs little reasoning",
+    medium: "Typical coding, explanation and review",
+    high: "Hard debugging, design and multi-step reasoning",
+  },
   redact: { names: [] },
   chains: {
     work: ["qwen-pc", "qwen", "heuristics"],
