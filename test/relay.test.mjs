@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, merge } from "../src/config.mjs";
+import { buildNotice } from "../src/nudge.mjs";
 import { handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
 
 const handlePrompt = async (args) => (await run(args))?.context ?? null;
@@ -39,6 +40,17 @@ test("nudges to a subagent and caches the model pick", async () => {
   assert.match(out, /subagent with model haiku/);
   assert.equal(store.get("s").model.value, "haiku");
   assert.equal(await pickSubagentModel({ input: { session_id: "s", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), "haiku");
+});
+
+test("a remote verdict below minConfidence is treated as inline", async () => {
+  const { deps, config, store } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.4 }, true), heuristics } });
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  assert.equal(store.get("s").model, undefined);
+});
+
+test("heuristic verdicts ignore minConfidence", async () => {
+  const { deps, config } = setup({ providers: { heuristics: { remote: false, heuristic: true, run: async () => ({ placement: "subagent", model: null, confidence: 0.5 }) } } });
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /subagent/);
 });
 
 test("sibling nudge names the native background command", async () => {
@@ -114,6 +126,26 @@ test("each nudge carries a short user-facing notice, and the degraded warning ha
 
   const down = setup({ providers: { jev: { remote: true, heuristic: false, run: async () => { throw new Error("x"); } }, heuristics } });
   assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relay: no classifier answered, using heuristics");
+});
+
+test("a low-confidence turn drops the cached model so the next pick is fresh", async () => {
+  const { deps, config, store } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.4 }, true), heuristics } });
+  store.set("s", { model: { value: "opus", at: 1_000_000 } });
+  await handlePrompt({ input, agent: "claude", config, deps });
+  assert.equal(store.get("s").model, undefined);
+});
+
+test("buildNotice has no line for an inline verdict", () => {
+  assert.equal(buildNotice({ placement: "inline", model: null, confidence: 0.9 }), null);
+});
+
+test("notices show the verdict confidence when the classifier reports one", async () => {
+  const sub = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
+  assert.equal((await run({ input, agent: "claude", config: sub.config, deps: sub.deps })).notice, "↪ jev-relay: subagent · haiku · 0.90");
+
+  const inline = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet", confidence: 0.75 }, true), heuristics } });
+  const out = await run({ input, agent: "claude", config: merge(inline.config, { report: "every-turn" }), deps: inline.deps });
+  assert.equal(out.notice, "· jev-relay: inline · sonnet · 0.75");
 });
 
 test("every-turn reporting says when a turn was skipped, cooling down, or judged inline", async () => {

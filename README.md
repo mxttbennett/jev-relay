@@ -74,11 +74,13 @@ Each nudge and each subagent model pick also prints one line to you through the 
 `systemMessage` field. The model sees the full advice, and you see this:
 
 ```
-↪ jev-relay: subagent · sonnet
-↪ jev-relay: sibling session · sonnet
+↪ jev-relay: subagent · sonnet · 0.90
+↪ jev-relay: sibling session · sonnet · 0.85
 ↪ jev-relay: subagent model → haiku
 ⚠ jev-relay: no classifier answered, using heuristics
 ```
+
+The number is the classifier's confidence, shown when it reports one.
 
 By default you only see a line when `jev-relay` acts. Set `"report": "every-turn"` in the config to
 see one on every prompt, including the ones it skipped:
@@ -86,8 +88,12 @@ see one on every prompt, including the ones it skipped:
 ```
 · jev-relay: skipped · 12k tokens, cache warm
 · jev-relay: skipped · cooling down (1/3)
-· jev-relay: inline · sonnet
+· jev-relay: inline · sonnet · 0.80
 ```
+
+A remote verdict with confidence below `minConfidence` (default `0.6`) is treated as inline: no
+nudge and no model pick. Heuristic verdicts are not affected. A value outside 0–1 falls back to the
+default.
 
 ## Toggle
 

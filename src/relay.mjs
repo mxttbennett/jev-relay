@@ -24,7 +24,9 @@ export async function classify(signals, config, deps) {
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
   const result = await runChain(names, deps.providers, { ...signals, models, text: text.slice(-TEXT_CHARS) });
-  return { result, cls, hits };
+  const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
+  if (low) result.verdict = { placement: "inline", model: null, confidence: result.verdict.confidence };
+  return { result, cls, hits, low };
 }
 
 function coolingDown(nudge, contextTokens, cooldown) {
@@ -61,7 +63,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
     return everyTurn ? { context: "", notice: skipNotice(why) } : null;
   }
 
-  const { result, cls, hits } = await classify(
+  const { result, cls, hits, low } = await classify(
     {
       text: excerptOf(snapshot.turns, input.prompt),
       prompt: input.prompt,
@@ -95,7 +97,8 @@ export async function handlePrompt({ input, agent, config, deps }) {
   } else if (!result.heuristic) {
     state.degradedWarned = false;
   }
-  if (!result.heuristic && result.verdict.model) {
+  if (low) delete state.model;
+  else if (!result.heuristic && result.verdict.model) {
     state.model = { value: result.verdict.model, at: deps.now() };
   }
   const nudge = buildNudge(result.verdict, { agent, contextTokens });

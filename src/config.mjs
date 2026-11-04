@@ -36,6 +36,7 @@ export const DEFAULTS = {
     ],
   },
   cooldown: { prompts: 3, growth: 0.25 },
+  minConfidence: 0.6,
   report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
@@ -77,6 +78,7 @@ export function loadConfig(path = CONFIG_PATH) {
     user = JSON.parse(readFileSync(path, "utf8"));
   } catch {}
   const config = merge(DEFAULTS, user);
+  if (!(config.minConfidence >= 0 && config.minConfidence <= 1)) config.minConfidence = DEFAULTS.minConfidence;
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
   return config;

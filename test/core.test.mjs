@@ -73,6 +73,17 @@ test("chain falls through failures and flags degraded only when heuristics answe
   assert.equal(none.verdict.placement, "inline");
 });
 
+test("an out-of-range minConfidence falls back to the default", () => {
+  const dir = mkdtempSync(join(tmpdir(), "relay-"));
+  const file = join(dir, "config.json");
+  for (const bad of ["high", 1.5, -1]) {
+    writeFileSync(file, JSON.stringify({ minConfidence: bad }));
+    assert.equal(loadConfig(file).minConfidence, 0.6);
+  }
+  writeFileSync(file, JSON.stringify({ minConfidence: 0.8 }));
+  assert.equal(loadConfig(file).minConfidence, 0.8);
+});
+
 test("config merges user overrides, replaces arrays, and classifies repos", () => {
   const merged = merge(DEFAULTS, { chains: { work: ["heuristics"] }, agents: { codex: { enabled: false } } });
   assert.deepEqual(merged.chains.work, ["heuristics"]);
