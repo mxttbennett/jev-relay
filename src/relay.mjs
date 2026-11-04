@@ -16,6 +16,20 @@ const TURN_CHARS = 1500;
 const TEXT_CHARS = 6000;
 const MODEL_TTL_MS = 10 * 60 * 1000;
 
+export function classifyFields({ result, cls, hits, low, raw }) {
+  return {
+    repoClass: cls,
+    redactionHits: hits,
+    provider: result.provider,
+    verdict: result.verdict,
+    ...(low && { lowConfidence: true, rawVerdict: raw }),
+    degraded: result.degraded,
+    latencyMs: result.latencyMs,
+    providerMs: result.providerMs,
+    failures: result.failures,
+  };
+}
+
 export async function classify(signals, config, deps) {
   const cls = repoClass(config, signals.cwd, deps.remoteOf);
   const { text, hits } = redact(signals.text, config.redact.names);
@@ -26,8 +40,9 @@ export async function classify(signals, config, deps) {
   );
   const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) });
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
-  if (low) result.verdict = { placement: "inline", model: null, effort: null, confidence: result.verdict.confidence };
-  return { result, cls, hits, low };
+  const raw = result.verdict;
+  if (low) result.verdict = { placement: "inline", model: null, effort: null, confidence: raw.confidence };
+  return { result, cls, hits, low, raw };
 }
 
 function coolingDown(nudge, contextTokens, cooldown) {
@@ -53,6 +68,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   if (!shouldClassify({ contextTokens, idleMs, prompt: input.prompt }, config.gate)) {
     const cache = idleMs >= config.gate.cacheTtlMs ? "cold" : "warm";
     const why = `${Math.round(contextTokens / 1000)}k tokens, cache ${cache}`;
+    deps.state.log({ event: "skip", reason: "gate", agent, session: input.session_id, contextTokens, idleMs, cache });
     return everyTurn ? { context: "", notice: skipNotice(why) } : null;
   }
 
@@ -61,10 +77,11 @@ export async function handlePrompt({ input, agent, config, deps }) {
     state.nudge.promptsSince += 1;
     deps.state.save(input.session_id, state);
     const why = `cooling down (${state.nudge.promptsSince}/${config.cooldown.prompts})`;
+    deps.state.log({ event: "skip", reason: "cooldown", agent, session: input.session_id, contextTokens, idleMs });
     return everyTurn ? { context: "", notice: skipNotice(why) } : null;
   }
 
-  const { result, cls, hits, low } = await classify(
+  const classified = await classify(
     {
       text: excerptOf(snapshot.turns, input.prompt),
       prompt: input.prompt,
@@ -76,18 +93,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
     config,
     deps,
   );
-  deps.state.log({
-    event: "prompt",
-    agent,
-    session: input.session_id,
-    repoClass: cls,
-    redactionHits: hits,
-    contextTokens,
-    idleMs,
-    provider: result.provider,
-    verdict: result.verdict,
-    failures: result.failures,
-  });
+  const { result, low } = classified;
 
   const lines = [];
   const notices = [];
@@ -113,6 +119,17 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const inlineModel = !result.heuristic && result.verdict.placement === "inline" ? result.verdict.model : null;
   const switchedInline = inlineModel !== null && inlineModel !== state.inlineModel;
   if (inlineModel !== null) state.inlineModel = inlineModel;
+  deps.state.log({
+    event: "prompt",
+    agent,
+    session: input.session_id,
+    contextTokens,
+    idleMs,
+    promptChars: input.prompt.length,
+    nudged: Boolean(nudge),
+    switchedInline,
+    ...classifyFields(classified),
+  });
   deps.state.save(input.session_id, state);
   if (lines.length) return { context: lines.join("\n"), notice: notices.join("\n") };
   return everyTurn || switchedInline ? { context: "", notice: inlineNotice(result.verdict) } : null;
@@ -121,25 +138,24 @@ export async function handlePrompt({ input, agent, config, deps }) {
 export async function pickSubagentModel({ input, agent, config, deps }) {
   if (!isEnabled(config, agent, deps.env) || !AGENT_META[agent].subagentModel) return null;
   const tool = input.tool_input ?? {};
-  if (tool.model || tool.subagent_type === "fork" || !tool.prompt) return null;
+  const base = { event: "agent", agent, session: input.session_id };
+  if (tool.model || tool.subagent_type === "fork" || !tool.prompt) {
+    deps.state.log({ ...base, source: tool.model ? "explicit" : "skipped", model: tool.model ?? null });
+    return null;
+  }
 
   const state = deps.state.load(input.session_id);
-  if (state.model && deps.now() - state.model.at < MODEL_TTL_MS) return state.model.value;
+  if (state.model && deps.now() - state.model.at < MODEL_TTL_MS) {
+    deps.state.log({ ...base, source: "cached", model: state.model.value });
+    return state.model.value;
+  }
 
-  const { result, cls, hits } = await classify(
+  const classified = await classify(
     { text: `user: ${tool.prompt.slice(0, TURN_CHARS)}`, prompt: tool.prompt, agent, contextTokens: 0, idleMs: 0, cwd: input.cwd },
     config,
     deps,
   );
-  deps.state.log({
-    event: "agent",
-    agent,
-    session: input.session_id,
-    repoClass: cls,
-    redactionHits: hits,
-    provider: result.provider,
-    model: result.verdict.model,
-    failures: result.failures,
-  });
+  const { result } = classified;
+  deps.state.log({ ...base, source: "classifier", model: result.verdict.model, ...classifyFields(classified) });
   return result.heuristic ? null : result.verdict.model;
 }

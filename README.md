@@ -156,4 +156,33 @@ jev-relay on all
 npm test
 ```
 
-Decisions are logged to `~/.local/state/jev-relay/relay.log`.
+## Metrics
+
+Both paths write JSONL events with no prompt text, only lengths. The hooks append to
+`~/.local/state/jev-relay/relay.log`. The mod writes one file per session under
+`~/.local/state/jev-relay/mod/`.
+
+| Event | Source | Records |
+| --- | --- | --- |
+| `prompt` / `decision` | hook / mod | provider, verdict, raw verdict behind a low-confidence override, latency, failures with timings, redaction hits, whether it nudged |
+| `skip` | hook | gate or cooldown reason, context size |
+| `agent` / `spawn-model` | hook / mod | subagent model pick and its source (`classifier`, `cached`, `explicit`) |
+| `applied` | mod | model and effort applied, the model that served the turn, whether it matches the pick, token usage |
+| `action` | mod | subagent spawned, sibling accepted, declined or failed |
+| `manual` | mod | you changed the model yourself, which stops routing for the session |
+| `deadline-miss` | mod | the classifier answered too late to affect the turn |
+
+```bash
+jev-relay stats              # everything
+jev-relay stats --days 7     # last week
+jev-relay stats --json       # machine-readable
+```
+
+Read the report as a checklist:
+
+- **Heuristic fallback and failures**: a high rate means a classifier is down or too slow.
+- **Latency p95 and deadline misses**: verdicts that arrive late never apply.
+- **Confidence buckets and low-confidence rate**: too many verdicts under `minConfidence` means the threshold or the classifier needs work.
+- **Manual overrides and sibling acceptance**: you rejecting the router is the clearest wrong signal.
+- **Served ≠ picked**: the router asked for one model and another answered.
+- **Gate skip rate**: how often the gate hides turns the router could have helped.
