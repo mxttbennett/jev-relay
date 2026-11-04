@@ -163,9 +163,11 @@ test("codex transcript yields last input tokens, timestamp and prose turns, skip
 test("toggle writes per-agent flags and reports status", () => {
   const dir = mkdtempSync(join(tmpdir(), "relay-"));
   const path = join(dir, "config.json");
-  assert.equal(runCli(["status"], path), "claude: on\ncodex: on");
-  assert.equal(runCli(["off", "codex"], path), "claude: on\ncodex: off");
-  assert.equal(runCli(["on", "all"], path), "claude: on\ncodex: on");
+  assert.equal(runCli(["status"], path), "claude: on\ncodex: on\nband: off");
+  assert.equal(runCli(["off", "codex"], path), "claude: on\ncodex: off\nband: off");
+  assert.equal(runCli(["on", "all"], path), "claude: on\ncodex: on\nband: off");
+  assert.equal(runCli(["band", "on"], path), "claude: on\ncodex: on\nband: on");
+  assert.throws(() => runCli(["band", "maybe"], path));
   assert.deepEqual(setEnabled({}, ["claude"], false), { agents: { claude: { enabled: false } } });
   assert.throws(() => resolveAgents("gemini"));
   assert.equal(loadConfig(path).agents.codex.enabled, true);

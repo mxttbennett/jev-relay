@@ -1,16 +1,19 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-model.mjs\" claude",
-            "timeout": 25
-          }
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Agent",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-model.mjs\" claude",
+                        "timeout": 25
+                    }
+                ]
+            }
         ]
-      }
+    },
+    "modules": [
+        "./register.tsx"
     ]
-  }
 }

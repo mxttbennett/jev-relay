@@ -1,6 +1,6 @@
-import { AGENTS } from "./agents.mjs";
+import { AGENT_META } from "./agent-meta.mjs";
 import { runChain } from "./chain.mjs";
-import { isEnabled, repoClass } from "./config.mjs";
+import { isEnabled, repoClass } from "./defaults.mjs";
 import { shouldClassify } from "./heuristics.mjs";
 import {
   DEGRADED_BADGE,
@@ -115,7 +115,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
 }
 
 export async function pickSubagentModel({ input, agent, config, deps }) {
-  if (!isEnabled(config, agent, deps.env) || !AGENTS[agent].subagentModel) return null;
+  if (!isEnabled(config, agent, deps.env) || !AGENT_META[agent].subagentModel) return null;
   const tool = input.tool_input ?? {};
   if (tool.model || tool.subagent_type === "fork" || !tool.prompt) return null;
 

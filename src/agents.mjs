@@ -1,3 +1,4 @@
+import { AGENT_META } from "./agent-meta.mjs";
 import { claudeLine, codexLine, readTranscript } from "./transcripts.mjs";
 
 /**
@@ -6,16 +7,8 @@ import { claudeLine, codexLine, readTranscript } from "./transcripts.mjs";
  * subagentModel is false where the CLI has no Agent tool to pick a model for.
  */
 export const AGENTS = {
-  claude: {
-    readTranscript: (path) => readTranscript(path, claudeLine),
-    siblingCommand: (model) => `claude --bg${model ? ` --model ${model}` : ""} "<brief>"`,
-    subagentModel: true,
-  },
-  codex: {
-    readTranscript: (path) => readTranscript(path, codexLine),
-    siblingCommand: (model) => `codex exec${model ? ` -m ${model}` : ""} "<brief>"`,
-    subagentModel: false,
-  },
+  claude: { ...AGENT_META.claude, readTranscript: (path) => readTranscript(path, claudeLine) },
+  codex: { ...AGENT_META.codex, readTranscript: (path) => readTranscript(path, codexLine) },
 };
 
 export const agentNames = Object.keys(AGENTS);

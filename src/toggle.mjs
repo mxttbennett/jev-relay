@@ -14,19 +14,34 @@ export function resolveAgents(target) {
   return [target];
 }
 
+function readUser(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeUser(path, config) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+}
+
 export function runCli(argv, path = CONFIG_PATH) {
   const [command, target] = argv;
   if (command === "status" || command === undefined) {
-    const { agents } = loadConfig(path);
-    return AGENTS.map((a) => `${a}: ${agents[a].enabled === false ? "off" : "on"}`).join("\n");
+    const { agents, band } = loadConfig(path);
+    const lines = AGENTS.map((a) => `${a}: ${agents[a].enabled === false ? "off" : "on"}`);
+    return [...lines, `band: ${band.enabled ? "on" : "off"}`].join("\n");
   }
-  if (command !== "on" && command !== "off") throw new Error("usage: jev-relay status|on|off [claude|codex|all]");
-  let user = {};
-  try {
-    user = JSON.parse(readFileSync(path, "utf8"));
-  } catch {}
-  const next = setEnabled(user, resolveAgents(target), command === "on");
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
+  if (command === "band") {
+    if (target !== "on" && target !== "off") throw new Error("usage: jev-relay band on|off");
+    writeUser(path, merge(readUser(path), { band: { enabled: target === "on" } }));
+    return runCli(["status"], path);
+  }
+  if (command !== "on" && command !== "off") {
+    throw new Error("usage: jev-relay status|on|off [claude|codex|all]|band on|off");
+  }
+  writeUser(path, setEnabled(readUser(path), resolveAgents(target), command === "on"));
   return runCli(["status"], path);
 }

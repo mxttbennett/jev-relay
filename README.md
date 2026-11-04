@@ -95,6 +95,27 @@ A remote verdict with confidence below `minConfidence` (default `0.6`) is treate
 nudge and no model pick. Heuristic verdicts are not affected. A value outside 0–1 falls back to the
 default.
 
+## Mod
+
+`hooks/register.tsx` is also a Claude Code mod, so it works anywhere Claude Code loads mods
+(terminal, Desktop, VS Code) with no proxy and no `ANTHROPIC_BASE_URL`, and Remote Control keeps
+working. Load this repository through `CLAUDE_CODE_PLUGIN_DIRS`.
+
+- Every turn is classified, with no context-size gate. It runs on the model the classifier picks when the verdict is inline. `/model` stops it for that session.
+- A subagent verdict adds an instruction to delegate; the picked model applies to the subagent.
+- A sibling verdict asks you to approve. Approving runs `claude --bg` (or a background subagent
+  where the CLI is unavailable) with your prompt as the brief.
+
+## Band
+
+The band above the prompt shows the latest verdict, for example `jev: inline · haiku · 0.83`, with
+a Switch button when the pick differs from the session model. It is off by default:
+
+```bash
+jev-relay band on
+jev-relay band off
+```
+
 ## Toggle
 
 ```bash
