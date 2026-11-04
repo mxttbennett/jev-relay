@@ -170,10 +170,17 @@ export const register: Register = on => {
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
-    const model = decision?.placement === 'inline' ? decision.model : null
+    const picked = decision?.placement === 'inline' ? decision.model : null
+    const model = picked && !(await $.session.model()).toLowerCase().includes(picked.toLowerCase()) ? picked : null
     const effort = model && e.effort !== undefined ? decision?.effort : null
-    if (e.index === 0) void publish($, model ? { tier: model, model, effort } : {})
-    return yield* next(model ? { ...e, model, ...(effort && { effort }) } : e)
+    try {
+      const result = yield* next(model ? { ...e, model, ...(effort && { effort }) } : e)
+      if (e.index === 0) void publish($, model ? { tier: model, model, effort } : {})
+      return result
+    } catch (err) {
+      if (e.index === 0) void publish($, {})
+      throw err
+    }
   })
 
   on('turn.complete', async ($, e, next) => {
