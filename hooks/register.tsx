@@ -185,8 +185,7 @@ export const register: Register = on => {
     for await (const chunk of stream) {
       if (e.index === 0 && chunk.kind === 'stop') {
         const served = chunk.usage?.model
-        const isSwitched = served && !isSameModel(served, current)
-        void publish($, isSwitched ? { tier: tierOf(served), model: served, effort } : effort ? { effort } : {})
+        if (picked && served) void publish($, { tier: tierOf(served), model: served, effort })
       }
       yield chunk
     }
