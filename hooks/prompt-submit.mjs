@@ -16,12 +16,14 @@ try {
     deps: defaultDeps(agent, config),
   });
   if (advice) {
-    console.log(
-      JSON.stringify({
-        systemMessage: advice.notice,
-        hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: advice.context },
-      }),
-    );
+    const output = { systemMessage: advice.notice };
+    if (advice.context) {
+      output.hookSpecificOutput = {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: advice.context,
+      };
+    }
+    console.log(JSON.stringify(output));
   }
 } catch {}
 process.exit(0);

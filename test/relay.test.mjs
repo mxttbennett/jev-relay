@@ -115,3 +115,20 @@ test("each nudge carries a short user-facing notice, and the degraded warning ha
   const down = setup({ providers: { jev: { remote: true, heuristic: false, run: async () => { throw new Error("x"); } }, heuristics } });
   assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relay: no classifier answered, using heuristics");
 });
+
+test("every-turn reporting says when a turn was skipped, cooling down, or judged inline", async () => {
+  const every = (config) => merge(config, { report: "every-turn" });
+  const small = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics }, snapshot: { contextTokens: 12000, lastAt: 1_000_000, turns: [] } });
+  const skipped = await run({ input, agent: "claude", config: every(small.config), deps: small.deps });
+  assert.deepEqual(skipped, { context: "", notice: "· jev-relay: skipped · 12k tokens, cache warm" });
+  assert.equal(await run({ input, agent: "claude", config: small.config, deps: small.deps }), null);
+
+  const big = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics } });
+  const inline = await run({ input, agent: "claude", config: every(big.config), deps: big.deps });
+  assert.deepEqual(inline, { context: "", notice: "· jev-relay: inline · sonnet" });
+
+  const cooling = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
+  await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
+  const next = await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
+  assert.equal(next.notice, "· jev-relay: skipped · cooling down (1/3)");
+});

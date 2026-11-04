@@ -72,6 +72,15 @@ Each nudge and each subagent model pick also prints one line to you through the 
 ⚠ jev-relay: no classifier answered, using heuristics
 ```
 
+By default you only see a line when `jev-relay` acts. Set `"report": "every-turn"` in the config to
+see one on every prompt, including the ones it skipped:
+
+```
+· jev-relay: skipped · 12k tokens, cache warm
+· jev-relay: skipped · cooling down (1/3)
+· jev-relay: inline · sonnet
+```
+
 ## Toggle
 
 ```bash

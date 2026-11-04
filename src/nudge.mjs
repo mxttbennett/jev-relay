@@ -12,6 +12,11 @@ export function buildNotice(verdict) {
   return null;
 }
 
+export const skipNotice = (why) => `· jev-relay: skipped · ${why}`;
+
+export const inlineNotice = (verdict) =>
+  `· jev-relay: inline${verdict.model ? ` · ${verdict.model}` : ""}`;
+
 export const modelNotice = (model) => `↪ jev-relay: subagent model → ${model}`;
 
 export function buildNudge(verdict, { agent, contextTokens }) {

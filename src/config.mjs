@@ -24,6 +24,7 @@ export const DEFAULTS = {
   agents: { claude: { enabled: true }, codex: { enabled: true } },
   gate: { contextTokens: 100000, cacheTtlMs: 300000, coldMinTokens: 20000 },
   cooldown: { prompts: 3, growth: 0.25 },
+  report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
   redact: { names: [] },
