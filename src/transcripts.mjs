@@ -1,3 +1,4 @@
+import { titleFromTranscript } from "./notify.mjs";
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 
 const TAIL_BYTES = 1_000_000;
@@ -96,9 +97,7 @@ export function codexLine(record) {
 
 export function sessionTitle(path) {
   try {
-    const lines = readTail(path).split("\n").reverse();
-    const hit = lines.find((line) => line.includes('"ai-title"'));
-    return hit ? JSON.parse(hit).aiTitle ?? "" : "";
+    return titleFromTranscript(readTail(path));
   } catch {
     return "";
   }

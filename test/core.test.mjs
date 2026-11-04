@@ -232,3 +232,20 @@ test("session title is the latest ai-title in the transcript", async () => {
   assert.equal(sessionTitle(path), "new name");
   assert.equal(sessionTitle("/nope/missing.jsonl"), "");
 });
+
+test("modules the mod imports use no node builtins", async () => {
+  const { readFileSync } = await import("node:fs");
+  // Arrange
+  const seen = new Set();
+  const walk = (file) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    for (const [, spec] of source.matchAll(/from ['"]([^'"]+)['"]/g)) {
+      // Act & Assert
+      assert.ok(!spec.startsWith("node:"), `${file} imports ${spec}`);
+      if (spec.startsWith(".")) walk(new URL(spec, new URL(file, import.meta.url)).href);
+    }
+  };
+  walk("../hooks/register.tsx");
+});

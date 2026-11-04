@@ -3,8 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isEnabled, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
-import { decisionLabel, isChange, notifyCommand } from '../src/notify.mjs'
-import { sessionTitle } from '../src/transcripts.mjs'
+import { decisionLabel, isChange, notifyCommand, titleFromTranscript } from '../src/notify.mjs'
 import { classify } from '../src/relay.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
@@ -94,7 +93,8 @@ async function notify($: EngineInterface, message: string) {
   const cwd = await $.session.cwd()
   const id = await $.session.id()
   const transcript = `${home}/.claude/projects/${cwd.replace(/[^a-zA-Z0-9]/g, '-')}/${id}.jsonl`
-  const [cmd, ...args] = notifyCommand(message, sessionTitle(transcript) || 'jev-relay')
+  const title = titleFromTranscript((await $.fs.read(transcript).catch(() => '')).slice(-1_000_000))
+  const [cmd, ...args] = notifyCommand(message, title || 'jev-relay')
   await $.process.run([cmd, ...args], { timeoutMs: 3000 }).catch(() => {})
 }
 
