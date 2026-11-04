@@ -2,7 +2,14 @@ import { AGENTS } from "./agents.mjs";
 import { runChain } from "./chain.mjs";
 import { isEnabled, repoClass } from "./config.mjs";
 import { shouldClassify } from "./heuristics.mjs";
-import { DEGRADED_BADGE, DEGRADED_NOTICE, buildNotice, buildNudge } from "./nudge.mjs";
+import {
+  DEGRADED_BADGE,
+  DEGRADED_NOTICE,
+  buildNotice,
+  buildNudge,
+  inlineNotice,
+  skipNotice,
+} from "./nudge.mjs";
 import { redact } from "./redact.mjs";
 
 const TURN_CHARS = 1500;
@@ -39,13 +46,19 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const snapshot = deps.readTranscript(input.transcript_path);
   const contextTokens = snapshot.contextTokens;
   const idleMs = snapshot.lastAt ? deps.now() - snapshot.lastAt : 0;
-  if (!shouldClassify({ contextTokens, idleMs }, config.gate)) return null;
+  const everyTurn = config.report === "every-turn";
+  if (!shouldClassify({ contextTokens, idleMs }, config.gate)) {
+    const cache = idleMs >= config.gate.cacheTtlMs ? "cold" : "warm";
+    const why = `${Math.round(contextTokens / 1000)}k tokens, cache ${cache}`;
+    return everyTurn ? { context: "", notice: skipNotice(why) } : null;
+  }
 
   const state = deps.state.load(input.session_id);
   if (coolingDown(state.nudge, contextTokens, config.cooldown)) {
     state.nudge.promptsSince += 1;
     deps.state.save(input.session_id, state);
-    return null;
+    const why = `cooling down (${state.nudge.promptsSince}/${config.cooldown.prompts})`;
+    return everyTurn ? { context: "", notice: skipNotice(why) } : null;
   }
 
   const { result, cls, hits } = await classify(
@@ -94,7 +107,8 @@ export async function handlePrompt({ input, agent, config, deps }) {
     delete state.nudge;
   }
   deps.state.save(input.session_id, state);
-  return lines.length ? { context: lines.join("\n"), notice: notices.join("\n") } : null;
+  if (lines.length) return { context: lines.join("\n"), notice: notices.join("\n") };
+  return everyTurn ? { context: "", notice: inlineNotice(result.verdict) } : null;
 }
 
 export async function pickSubagentModel({ input, agent, config, deps }) {
