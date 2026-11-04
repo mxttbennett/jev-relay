@@ -130,6 +130,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await load($)
+    state.baseline = await $.session.model()
     return next(e)
   })
 
@@ -138,7 +139,6 @@ export const register: Register = on => {
     if (e.agentId || state.isManual || !isOn() || e.text.trim() === '') return result
 
     const sessionModel = await $.session.model()
-    state.baseline ??= sessionModel
     if (sessionModel !== state.baseline) {
       state.isManual = true
       await publish($, { manual: true })
@@ -161,12 +161,16 @@ export const register: Register = on => {
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId !== undefined || state.isManual || !isOn()) return yield* next(e)
+    if (e.agentId !== undefined || state.isManual) return yield* next(e)
+    if (!isOn()) {
+      if (e.index === 0) void publish($, {})
+      return yield* next(e)
+    }
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
     const model = decision?.placement === 'inline' ? decision.model : null
-    if (e.index === 0) await publish($, model ? { tier: model, model } : {})
+    if (e.index === 0) void publish($, model ? { tier: model, model } : {})
     return yield* next(model ? { ...e, model } : e)
   })
 
