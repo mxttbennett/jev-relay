@@ -101,7 +101,7 @@ default.
 (terminal, Desktop, VS Code) with no proxy and no `ANTHROPIC_BASE_URL`, and Remote Control keeps
 working. Load this repository through `CLAUDE_CODE_PLUGIN_DIRS`.
 
-- Each turn runs on the model the classifier picks. `/model` stops it for that session.
+- Every turn is classified, with no context-size gate. It runs on the model the classifier picks when the verdict is inline. `/model` stops it for that session.
 - A subagent verdict adds an instruction to delegate; the picked model applies to the subagent.
 - A sibling verdict asks you to approve. Approving runs `claude --bg` (or a background subagent
   where the CLI is unavailable) with your prompt as the brief.

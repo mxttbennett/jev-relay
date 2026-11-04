@@ -15,7 +15,6 @@ const state = {
   config: resolveConfig(),
   env: {} as Vars,
   jevEnv: {} as Vars,
-  remote: '',
   baseline: null as string | null,
   isManual: false,
   latest: null as Decision | null,
@@ -50,18 +49,20 @@ async function load($: EngineInterface) {
     JEV_API_KEY: await $.env.get('JEV_API_KEY'),
   }
   state.env = Object.fromEntries(Object.entries(real).filter(([, value]) => value))
-  const result = await $.process
-    .run(['git', '-C', await $.session.cwd(), 'remote', 'get-url', 'origin'], { timeoutMs: 2000 })
-    .catch(() => undefined)
-  state.remote = result?.stdout?.trim() ?? ''
 }
+
+async function remoteOf($: EngineInterface, cwd: string) {
+  try {
+    const result = await $.process.run(['git', '-C', cwd, 'remote', 'get-url', 'origin'], { timeoutMs: 2000 })
+    return result.stdout.trim()
+  } catch {
+    return ''
+  }
+}
+
+const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI/i.test(String(err))
 
 const isOn = () => isEnabled(state.config, 'claude', state.env)
-
-async function trace($: EngineInterface, data: unknown) {
-  const home = (await $.env.get('HOME')) ?? ''
-  await $.fs.write(`${home}/.local/state/jev-relay/router-debug.json`, JSON.stringify({ at: await $.clock.now(), data }))
-}
 
 async function decide($: EngineInterface, prompt: string): Promise<Decision | null> {
   const providers = createProviders(state.config, {
@@ -70,16 +71,17 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
     fetch: fetchLike($),
     readJevEnv: () => state.jevEnv,
   })
+  const cwd = await $.session.cwd()
+  const remote = await remoteOf($, cwd)
   const signals = {
     text: `user: ${prompt.slice(0, TURN_CHARS)}`,
     prompt,
     agent: 'claude',
     contextTokens: (await $.session.usage()).context.tokens ?? 0,
     idleMs: 0,
-    cwd: await $.session.cwd(),
+    cwd,
   }
-  const { result, cls } = await classify(signals, state.config, { providers, remoteOf: () => state.remote })
-  await trace($, { repoClass: cls, remote: state.remote, provider: result.provider, verdict: result.verdict, failures: result.failures, keys: Object.keys(state.jevEnv) })
+  const { result } = await classify(signals, state.config, { providers, remoteOf: () => remote })
   if (result.heuristic || !result.verdict.model) return null
   state.latest = result.verdict
   const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
@@ -92,8 +94,8 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string) {
   try {
     await $.process.run(['claude', '--bg', '--model', model, prompt], { cwd, timeoutMs: 30_000 })
     return true
-  } catch {
-    // $.process is CLI-only; Desktop falls back to a background subagent.
+  } catch (err) {
+    if (!isUnavailable(err)) return false
   }
   try {
     await $.agent.spawn({ prompt, model, name: 'jev-sibling', description: 'Handoff from jev-relay', cwd })
@@ -131,7 +133,7 @@ export const register: Register = on => {
       state.isManual = true
       return result
     }
-    const pending = decide($, e.text).catch(async (err: Error) => (await trace($, { error: err.message }), null))
+    const pending = decide($, e.text).catch(() => null)
     state.pending.set(e.turnId, pending)
     state.directive = null
 
@@ -151,8 +153,8 @@ export const register: Register = on => {
     if (e.agentId !== undefined || state.isManual || !isOn()) return yield* next(e)
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
-    const decision = (await Promise.race([state.pending.get(e.turnId), deadline])) ?? state.latest
-    return yield* next(decision?.model ? { ...e, model: decision.model } : e)
+    const decision = await Promise.race([state.pending.get(e.turnId), deadline])
+    return yield* next(decision?.placement === 'inline' && decision.model ? { ...e, model: decision.model } : e)
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -163,7 +165,8 @@ export const register: Register = on => {
 
   on('agent.spawn', async ($, e, next) => {
     if (e.fork || e.model || !isOn()) return next(e)
-    const decision = await decide($, e.prompt).catch(() => null)
+    const deadline = new Promise<null>(resolve => $.clock.after(DEADLINE_MS, () => resolve(null)))
+    const decision = await Promise.race([decide($, e.prompt).catch(() => null), deadline])
     return next(decision?.model ? { ...e, model: decision.model } : e)
   })
 
