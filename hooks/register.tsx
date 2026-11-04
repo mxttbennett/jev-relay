@@ -95,7 +95,7 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
   if (result.heuristic || !result.verdict.model) return null
   state.latest = result.verdict
   const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
-  await $.ui.status(`jev → ${result.verdict.model}${confidence}`)
+  if (state.config.statusNotice) await $.ui.status(`jev → ${result.verdict.model}${confidence}`)
   return result.verdict
 }
 
