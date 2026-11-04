@@ -139,10 +139,6 @@ test("the jev provider reads the effort answer", async () => {
   assert.equal(verdict.effort, "low");
 });
 
-test("defaults offer low, medium and high effort", () => {
-  // Act & Assert
-  assert.deepEqual(Object.keys(DEFAULTS.efforts), ["low", "medium", "high"]);
-});
 
 test("a low-confidence verdict drops its effort along with its model", async () => {
   // Arrange
@@ -165,4 +161,9 @@ test("a user efforts list replaces the default list, and an empty one stops the 
   // Assert
   assert.deepEqual(subset.efforts, { low: "quick" });
   assert.deepEqual(none.efforts, {});
+});
+
+test("defaults offer low, medium, high and xhigh effort", () => {
+  // Act & Assert
+  assert.deepEqual(Object.keys(DEFAULTS.efforts), ["low", "medium", "high", "xhigh"]);
 });

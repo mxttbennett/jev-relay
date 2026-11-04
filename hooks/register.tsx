@@ -63,7 +63,7 @@ async function remoteOf($: EngineInterface, cwd: string) {
 
 const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI/i.test(String(err))
 
-const EFFORTS = ['low', 'medium', 'high']
+const EFFORTS = ['low', 'medium', 'high', 'xhigh']
 const TIERS = ['haiku', 'sonnet', 'opus']
 const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
 

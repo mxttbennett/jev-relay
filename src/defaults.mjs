@@ -39,6 +39,7 @@ export const DEFAULTS = {
     low: "Mechanical or lookup work that needs little reasoning",
     medium: "Typical coding, explanation and review",
     high: "Hard debugging, design and multi-step reasoning",
+    xhigh: "The hardest work where extra reasoning pays off",
   },
   redact: { names: [] },
   chains: {
