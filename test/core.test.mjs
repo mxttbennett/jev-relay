@@ -249,3 +249,18 @@ test("modules the mod imports use no node builtins", async () => {
   };
   walk("../hooks/register.tsx");
 });
+
+test("sendNotification titles the notification from the transcript for any caller", async () => {
+  const { sendNotification, transcriptPath } = await import("../src/notify.mjs");
+  const ran = [];
+  const run = (argv) => ran.push(argv);
+  // Arrange
+  const transcript = '{"type":"ai-title","aiTitle":"Fix login"}\n';
+  // Act
+  await sendNotification({ message: "m", readTranscript: () => transcript, run });
+  await sendNotification({ message: "m", readTranscript: () => Promise.reject(new Error("x")), run });
+  // Assert
+  assert.equal(ran[0].at(-1), "Fix login");
+  assert.equal(ran[1].at(-1), "jev-relay");
+  assert.equal(transcriptPath({ configDir: "/c", cwd: "/a/b_c", id: "i" }), "/c/projects/-a-b-c/i.jsonl");
+});

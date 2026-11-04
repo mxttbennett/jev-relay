@@ -22,3 +22,12 @@ export function titleFromTranscript(text) {
     return "";
   }
 }
+
+export const transcriptPath = ({ configDir, cwd, id }) =>
+  `${configDir}/projects/${cwd.replace(/[^a-zA-Z0-9]/g, "-")}/${id}.jsonl`;
+
+export async function sendNotification({ message, readTranscript, run }) {
+  const text = await Promise.resolve(readTranscript()).catch(() => "");
+  const title = titleFromTranscript(String(text).slice(-1_000_000));
+  await Promise.resolve(run(notifyCommand(message, title || "jev-relay"))).catch(() => {});
+}
