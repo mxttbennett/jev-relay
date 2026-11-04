@@ -173,14 +173,14 @@ export const register: Register = on => {
     const picked = decision?.placement === 'inline' ? decision.model : null
     const model = picked && !(await $.session.model()).toLowerCase().includes(picked.toLowerCase()) ? picked : null
     const effort = model && e.effort !== undefined ? decision?.effort : null
-    try {
-      const result = yield* next(model ? { ...e, model, ...(effort && { effort }) } : e)
-      if (e.index === 0) void publish($, model ? { tier: model, model, effort } : {})
-      return result
-    } catch (err) {
-      if (e.index === 0) void publish($, {})
-      throw err
+    const stream = next(model ? { ...e, model, ...(effort && { effort }) } : e)
+    let isStarted = false
+    for await (const chunk of stream) {
+      if (!isStarted && e.index === 0) void publish($, model ? { tier: model, model, effort } : {})
+      isStarted = true
+      yield chunk
     }
+    return await stream.result
   })
 
   on('turn.complete', async ($, e, next) => {
