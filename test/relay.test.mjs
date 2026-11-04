@@ -1,0 +1,104 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { DEFAULTS, merge } from "../src/config.mjs";
+import { handlePrompt, pickSubagentModel } from "../src/relay.mjs";
+
+function setup({ providers, config = DEFAULTS, snapshot, remote = "git@github-personal:mxttbennett/x.git" } = {}) {
+  const store = new Map();
+  const logs = [];
+  const deps = {
+    env: {},
+    now: () => 1_000_000,
+    remoteOf: () => remote,
+    readTranscript: () => snapshot ?? { contextTokens: 150000, lastAt: 1_000_000, turns: [] },
+    providers,
+    state: {
+      load: (id) => structuredClone(store.get(id) ?? {}),
+      save: (id, s) => store.set(id, structuredClone(s)),
+      log: (e) => logs.push(e),
+    },
+  };
+  return { deps, store, logs, config };
+}
+
+const answer = (verdict, remote = false) => ({ remote, heuristic: false, run: async () => verdict });
+const down = (remote = false) => ({ remote, heuristic: false, run: async () => { throw new Error("down"); } });
+const heuristics = { remote: false, heuristic: true, run: async () => ({ placement: "inline", model: null, confidence: 0.5 }) };
+const input = { session_id: "s", prompt: "audit the repo", cwd: "/x", transcript_path: "/t" };
+
+test("silent below the gate", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics }, snapshot: { contextTokens: 1000, lastAt: 1_000_000, turns: [] } });
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+});
+
+test("nudges to a subagent and caches the model pick", async () => {
+  const { deps, config, store } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
+  const out = await handlePrompt({ input, agent: "claude", config, deps });
+  assert.match(out, /subagent with model haiku/);
+  assert.equal(store.get("s").model.value, "haiku");
+  assert.equal(await pickSubagentModel({ input: { session_id: "s", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), "haiku");
+});
+
+test("sibling nudge names the native background command", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics } });
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /claude --bg/);
+});
+
+test("cooldown silences the next prompts, then re-evaluates", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
+  await handlePrompt({ input, agent: "claude", config, deps });
+  for (let i = 0; i < 3; i += 1) assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /subagent/);
+});
+
+test("a redaction hit in a personal repo keeps the prompt away from remote providers", async () => {
+  let called = false;
+  const jev = { remote: true, heuristic: false, run: async () => { called = true; return { placement: "inline", model: "sonnet" }; } };
+  const { deps, config } = setup({ providers: { jev, heuristics } });
+  await handlePrompt({ input: { ...input, prompt: "email jo@acme.com about it" }, agent: "claude", config, deps });
+  assert.equal(called, false);
+});
+
+test("work repos use the local chain and never the remote provider", async () => {
+  let remoteCalled = false;
+  const jev = { remote: true, heuristic: false, run: async () => { remoteCalled = true; return { placement: "inline", model: "opus" }; } };
+  const { deps, config } = setup({
+    remote: "git@github.com:acme-corp/work-app.git",
+    providers: { jev, "qwen-pc": answer({ placement: "subagent", model: "sonnet" }), qwen: down(), heuristics },
+  });
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /subagent with model sonnet/);
+  assert.equal(remoteCalled, false);
+});
+
+test("degraded notice appears once per session and re-arms after a success", async () => {
+  const config = merge(DEFAULTS, { chains: { personal: ["jev", "heuristics"] } });
+  const providers = { jev: down(true), heuristics };
+  const { deps } = setup({ providers, config });
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  providers.jev = answer({ placement: "inline", model: "sonnet" }, true);
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  providers.jev = down(true);
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
+});
+
+test("disabled agent does nothing", async () => {
+  const config = merge(DEFAULTS, { agents: { claude: { enabled: false } } });
+  const { deps } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  assert.equal(await pickSubagentModel({ input: { tool_input: { prompt: "p" } }, agent: "claude", config, deps }), null);
+});
+
+test("codex gets nudges with its sibling command and never a subagent model pick", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics } });
+  assert.match(await handlePrompt({ input, agent: "codex", config, deps }), /codex exec/);
+  assert.equal(await pickSubagentModel({ input: { tool_input: { prompt: "p" } }, agent: "codex", config, deps }), null);
+});
+
+test("subagent model pick skips explicit models and forks, and classifies on a cache miss", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "opus" }, true), heuristics } });
+  const call = (tool_input) => pickSubagentModel({ input: { session_id: "n", cwd: "/x", tool_input }, agent: "claude", config, deps });
+  assert.equal(await call({ prompt: "p", model: "haiku" }), null);
+  assert.equal(await call({ prompt: "p", subagent_type: "fork" }), null);
+  assert.equal(await call({ prompt: "p" }), "opus");
+});
