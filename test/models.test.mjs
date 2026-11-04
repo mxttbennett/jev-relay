@@ -117,6 +117,7 @@ test("the classifier is only asked about the listed efforts", () => {
   const questions = jevQuestions(two, levels);
 
   // Assert
+  assert.match(prompt, /- low: little reasoning/);
   assert.match(prompt, /- high: hard reasoning/);
   assert.match(prompt, /"effort":"\.\.\."/);
   assert.deepEqual(questions.effort_choice.criteria, levels);

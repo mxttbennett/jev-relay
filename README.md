@@ -97,10 +97,11 @@ default.
 
 ## Effort
 
-The same classifier call picks a reasoning effort for the turn (`low`, `medium` or `high`). The mod
+The same classifier call picks a reasoning effort for the turn (`low`, `medium`, `high` or `xhigh`). The mod
 applies it, along with the model, to inline turns on models that take an effort. The hooks ignore
 it. `efforts` lists the levels the classifier may pick and their descriptions. Set `"efforts": {}`
-to stop asking, or write your own list, which replaces the default.
+to stop asking, or write your own list, which replaces the default. Keys must be `low`, `medium`,
+`high` or `xhigh`; the mod ignores any other level.
 
 ## Mod
 

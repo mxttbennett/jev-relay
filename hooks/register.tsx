@@ -66,6 +66,7 @@ const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']
 const TIERS = ['haiku', 'sonnet', 'opus']
 const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
+const isSameModel = (a: string, b: string) => a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase())
 
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
@@ -177,14 +178,15 @@ export const register: Register = on => {
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
     const current = await $.session.model()
     const picked = decision?.placement === 'inline' ? decision.model : null
-    const model = picked && tierOf(picked) !== tierOf(current) ? picked : null
+    const model = picked && !isSameModel(picked, current) ? picked : null
     const wanted = decision?.placement === 'inline' ? decision.effort : null
     const effort = wanted && EFFORTS.includes(wanted) && e.effort !== undefined ? wanted : null
     const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)
     for await (const chunk of stream) {
       if (e.index === 0 && chunk.kind === 'stop') {
         const served = chunk.usage?.model
-        void publish($, served && tierOf(served) !== tierOf(current) ? { tier: tierOf(served), model: served, effort } : {})
+        const isSwitched = served && !isSameModel(served, current)
+        void publish($, isSwitched ? { tier: tierOf(served), model: served, effort } : effort ? { effort } : {})
       }
       yield chunk
     }
