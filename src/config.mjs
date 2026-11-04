@@ -78,6 +78,7 @@ export function loadConfig(path = CONFIG_PATH) {
     user = JSON.parse(readFileSync(path, "utf8"));
   } catch {}
   const config = merge(DEFAULTS, user);
+  if (!(config.minConfidence >= 0 && config.minConfidence <= 1)) config.minConfidence = DEFAULTS.minConfidence;
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
   return config;

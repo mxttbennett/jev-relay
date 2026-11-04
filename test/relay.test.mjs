@@ -128,6 +128,13 @@ test("each nudge carries a short user-facing notice, and the degraded warning ha
   assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relay: no classifier answered, using heuristics");
 });
 
+test("a low-confidence turn drops the cached model so the next pick is fresh", async () => {
+  const { deps, config, store } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.4 }, true), heuristics } });
+  store.set("s", { model: { value: "opus", at: 1_000_000 } });
+  await handlePrompt({ input, agent: "claude", config, deps });
+  assert.equal(store.get("s").model, undefined);
+});
+
 test("buildNotice has no line for an inline verdict", () => {
   assert.equal(buildNotice({ placement: "inline", model: null, confidence: 0.9 }), null);
 });
