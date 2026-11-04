@@ -63,6 +63,9 @@ async function remoteOf($: EngineInterface, cwd: string) {
 
 const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI/i.test(String(err))
 
+const TIERS = ['haiku', 'sonnet', 'opus']
+const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
+
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
 async function publish($: EngineInterface, status: Record<string, unknown>) {
@@ -170,14 +173,16 @@ export const register: Register = on => {
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
+    const current = await $.session.model()
     const picked = decision?.placement === 'inline' ? decision.model : null
-    const model = picked && !(await $.session.model()).toLowerCase().includes(picked.toLowerCase()) ? picked : null
+    const model = picked && tierOf(picked) !== tierOf(current) ? picked : null
     const effort = model && e.effort !== undefined ? decision?.effort : null
     const stream = next(model ? { ...e, model, ...(effort && { effort }) } : e)
-    let isStarted = false
     for await (const chunk of stream) {
-      if (!isStarted && e.index === 0) void publish($, model ? { tier: model, model, effort } : {})
-      isStarted = true
+      if (e.index === 0 && chunk.kind === 'stop') {
+        const served = chunk.usage?.model
+        void publish($, served && tierOf(served) !== tierOf(current) ? { tier: tierOf(served), model: served, effort } : {})
+      }
       yield chunk
     }
     return await stream.result
