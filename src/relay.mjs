@@ -47,7 +47,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const contextTokens = snapshot.contextTokens;
   const idleMs = snapshot.lastAt ? deps.now() - snapshot.lastAt : 0;
   const everyTurn = config.report === "every-turn";
-  if (!shouldClassify({ contextTokens, idleMs }, config.gate)) {
+  if (!shouldClassify({ contextTokens, idleMs, prompt: input.prompt }, config.gate)) {
     const cache = idleMs >= config.gate.cacheTtlMs ? "cold" : "warm";
     const why = `${Math.round(contextTokens / 1000)}k tokens, cache ${cache}`;
     return everyTurn ? { context: "", notice: skipNotice(why) } : null;
