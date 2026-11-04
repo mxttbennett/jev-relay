@@ -5,17 +5,21 @@ export const DEGRADED_NOTICE =
 
 export const DEGRADED_BADGE = "⚠ jev-relay: no classifier answered, using heuristics";
 
-export function buildNotice(verdict) {
+const detail = (verdict) => {
   const model = verdict.model ? ` · ${verdict.model}` : "";
-  if (verdict.placement === "subagent") return `↪ jev-relay: subagent${model}`;
-  if (verdict.placement === "sibling") return `↪ jev-relay: sibling session${model}`;
+  const confidence = verdict.confidence == null ? "" : ` · ${verdict.confidence.toFixed(2)}`;
+  return `${model}${confidence}`;
+};
+
+export function buildNotice(verdict) {
+  if (verdict.placement === "subagent") return `↪ jev-relay: subagent${detail(verdict)}`;
+  if (verdict.placement === "sibling") return `↪ jev-relay: sibling session${detail(verdict)}`;
   return null;
 }
 
 export const skipNotice = (why) => `· jev-relay: skipped · ${why}`;
 
-export const inlineNotice = (verdict) =>
-  `· jev-relay: inline${verdict.model ? ` · ${verdict.model}` : ""}`;
+export const inlineNotice = (verdict) => `· jev-relay: inline${detail(verdict)}`;
 
 export const modelNotice = (model) => `↪ jev-relay: subagent model → ${model}`;
 

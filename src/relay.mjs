@@ -24,6 +24,9 @@ export async function classify(signals, config, deps) {
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
   const result = await runChain(names, deps.providers, { ...signals, models, text: text.slice(-TEXT_CHARS) });
+  if (!result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence) {
+    result.verdict = { placement: "inline", model: null, confidence: result.verdict.confidence };
+  }
   return { result, cls, hits };
 }
 
