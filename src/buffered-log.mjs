@@ -1,5 +1,5 @@
-export function createBufferedLog(write) {
-  const lines = [];
+export function createBufferedLog(write, existing = "") {
+  const lines = existing.split("\n").filter(Boolean);
   let queue = Promise.resolve();
   return (entry) => {
     lines.push(JSON.stringify({ at: new Date().toISOString(), ...entry }));

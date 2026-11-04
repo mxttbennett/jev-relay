@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { STATE_DIR } from "./state.mjs";
 
 const DAY_MS = 86_400_000;
+const MOD_EVENTS = new Set(["decision", "applied", "manual", "action", "spawn-model", "deadline-miss"]);
 const BUCKETS = [
   ["<0.5", (c) => c < 0.5],
   ["0.5-0.6", (c) => c < 0.6],
@@ -56,12 +57,16 @@ const sorted = (obj) => Object.fromEntries(Object.entries(obj).sort((a, b) => b[
 export function summarize(events) {
   const of = (name) => events.filter((e) => e.event === name);
   const decisions = events.filter((e) => e.event === "prompt" || e.event === "decision");
+  const hookPrompts = of("prompt");
   const skips = of("skip");
+  const modTurns = of("decision").filter((e) => e.trigger !== "spawn");
+  const isHeuristic = (e) => e.heuristic ?? (e.provider == null || e.provider === "heuristics");
+  const modSessions = new Set(events.filter((e) => MOD_EVENTS.has(e.event)).map((e) => e.session));
   const agents = of("agent");
   const applied = of("applied");
   const actions = of("action");
-  const turnsSeen = decisions.length + skips.length;
-  const remote = decisions.filter((e) => e.provider && e.provider !== "heuristics");
+  const hookTurns = hookPrompts.length + skips.length;
+  const remote = decisions.filter((e) => !isHeuristic(e));
   const withConfidence = remote.filter((e) => (e.rawVerdict ?? e.verdict)?.confidence != null);
 
   const providerStats = {};
@@ -96,15 +101,15 @@ export function summarize(events) {
   return {
     window: { from: events[0]?.at ?? null, to: events.at(-1)?.at ?? null, events: events.length },
     volume: {
-      turns: turnsSeen,
+      turns: hookTurns + modTurns.length,
       classified: decisions.length,
-      gateSkipRate: rate(skips.filter((e) => e.reason === "gate").length, turnsSeen),
-      cooldownSkipRate: rate(skips.filter((e) => e.reason === "cooldown").length, turnsSeen),
+      gateSkipRate: rate(skips.filter((e) => e.reason === "gate").length, hookTurns),
+      cooldownSkipRate: rate(skips.filter((e) => e.reason === "cooldown").length, hookTurns),
       sessions: new Set(events.map((e) => e.session).filter(Boolean)).size,
     },
     health: {
       degradedRate: rate(decisions.filter((e) => e.degraded).length, decisions.length),
-      heuristicRate: rate(decisions.filter((e) => e.provider === "heuristics" || e.provider == null).length, decisions.length),
+      heuristicRate: rate(decisions.filter(isHeuristic).length, decisions.length),
       redactionHitRate: rate(decisions.filter((e) => e.redactionHits > 0).length, decisions.length),
       latencyMs: { p50: percentile(lat, 50), p95: percentile(lat, 95), max: lat.length ? Math.max(...lat) : null },
       deadlineMisses: of("deadline-miss").length,
@@ -134,7 +139,7 @@ export function summarize(events) {
         applied.filter((e) => e.servedMatches != null).length,
       ),
       manualOverrides: manual,
-      manualOverrideRate: rate(manual, new Set(of("manual").concat(applied).map((e) => e.session)).size),
+      manualOverrideRate: rate(manual, modSessions.size),
       siblingAcceptRate: rate(sibling.filter((a) => a.outcome === "accepted").length, sibling.length),
       siblingSpawnFailures: sibling.filter((a) => a.outcome === "spawn-failed").length,
       subagentActions: sorted(count(actions.filter((a) => a.placement === "subagent"), (a) => a.outcome)),

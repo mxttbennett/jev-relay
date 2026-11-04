@@ -21,6 +21,7 @@ export function classifyFields({ result, cls, hits, low, raw }) {
     repoClass: cls,
     redactionHits: hits,
     provider: result.provider,
+    heuristic: result.heuristic,
     verdict: result.verdict,
     ...(low && { lowConfidence: true, rawVerdict: raw }),
     degraded: result.degraded,

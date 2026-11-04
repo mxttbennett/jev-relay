@@ -25,6 +25,7 @@ const state = {
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
   home: '',
+  missed: new WeakSet<object>(),
   logs: new Map<string, (entry: Record<string, unknown>) => Promise<void>>(),
 }
 
@@ -97,7 +98,8 @@ async function record($: EngineInterface, entry: Record<string, unknown>) {
     const session = (await $.session.id()).replace(/[^\w-]/g, '')
     if (!state.logs.has(session)) {
       const path = `${state.home}/.local/state/jev-relay/mod/${session}.jsonl`
-      state.logs.set(session, createBufferedLog(text => $.fs.write(path, text)))
+      const existing = await $.fs.read(path).catch(() => '')
+      state.logs.set(session, createBufferedLog(text => $.fs.write(path, text), typeof existing === 'string' ? existing : ''))
     }
     await state.logs.get(session)!({ agent: 'claude', session, ...entry })
   } catch {
@@ -225,7 +227,10 @@ export const register: Register = on => {
     state.byText.set(e.text, pending)
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([pending, deadline])
-    if (decision === undefined) void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
+    if (decision === undefined) {
+      state.missed.add(pending)
+      void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
+    }
     const directive = decision ? await act($, e.text, decision).catch(() => null) : null
     return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
@@ -238,8 +243,12 @@ export const register: Register = on => {
     }
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
-    const decision = await Promise.race([state.pending.get(e.turnId), deadline])
-    if (decision === undefined && e.index === 0) void record($, { event: 'deadline-miss', where: 'step', deadlineMs: DEADLINE_MS })
+    const pending = state.pending.get(e.turnId)
+    const decision = await Promise.race([pending, deadline])
+    if (decision === undefined && pending && !state.missed.has(pending) && e.index === 0) {
+      state.missed.add(pending)
+      void record($, { event: 'deadline-miss', where: 'step', deadlineMs: DEADLINE_MS })
+    }
     const current = await $.session.model().catch(() => null)
     if (current === null) return yield* next(e)
     if (current !== state.baseline) {
@@ -286,9 +295,12 @@ export const register: Register = on => {
 
   on('agent.spawn', async ($, e, next) => {
     if (e.fork || e.model || !isOn()) return next(e)
-    const deadline = new Promise<null>(resolve => $.clock.after(DEADLINE_MS, () => resolve(null)))
-    const decision = await Promise.race([decide($, e.prompt, 'spawn').catch(() => null), deadline])
-    void record($, { event: 'spawn-model', picked: decision?.model ?? null, deadlineMiss: decision === null })
+    const timedOut = Symbol('timeout')
+    const deadline = new Promise<typeof timedOut>(resolve => $.clock.after(DEADLINE_MS, () => resolve(timedOut)))
+    const raced = await Promise.race([decide($, e.prompt, 'spawn').catch(() => null), deadline])
+    const decision = raced === timedOut ? null : raced
+    if (raced === timedOut) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
+    void record($, { event: 'spawn-model', picked: decision?.model ?? null })
     return next(decision?.model ? { ...e, model: decision.model } : e)
   })
 

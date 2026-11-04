@@ -127,3 +127,35 @@ test("readEvents merges relay.log and per-session mod logs and honours --days", 
   assert.equal(JSON.parse(runStats(["--json"], dir, now)).volume.classified, 3);
   assert.throws(() => runStats(["--days", "x"], dir, now), /usage/);
 });
+
+test("createBufferedLog keeps events already on disk", async () => {
+  const writes = [];
+  const log = createBufferedLog(async (text) => { writes.push(text); }, `${JSON.stringify({ event: "old" })}\n`);
+  await log({ event: "new" });
+  assert.deepEqual(writes.at(-1).trim().split("\n").map((l) => JSON.parse(l).event), ["old", "new"]);
+});
+
+test("summarize keeps spawn decisions out of turns and measures gate skips against hook turns", () => {
+  const at = "2026-11-04T00:00:00Z";
+  const s = summarize([
+    { at, event: "prompt", session: "h", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+    { at, event: "skip", reason: "gate", session: "h" },
+    { at, event: "decision", trigger: "submit", session: "m", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+    { at, event: "decision", trigger: "spawn", session: "m", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+    { at, event: "manual", session: "m" },
+    { at, event: "decision", trigger: "submit", session: "n", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+  ]);
+  assert.equal(s.volume.turns, 4);
+  assert.equal(s.volume.gateSkipRate, 0.5);
+  assert.equal(s.outcomes.manualOverrideRate, 0.5);
+});
+
+test("a heuristic provider under a custom name is counted as heuristic", () => {
+  const at = "2026-11-04T00:00:00Z";
+  const s = summarize([
+    { at, event: "prompt", provider: "rules", heuristic: true, verdict: { placement: "inline", confidence: 0.5 }, failures: [] },
+    { at, event: "prompt", provider: "jev", heuristic: false, verdict: { placement: "inline", confidence: 0.9 }, failures: [] },
+  ]);
+  assert.equal(s.health.heuristicRate, 0.5);
+  assert.equal(s.verdicts.meanConfidence, 0.9);
+});
