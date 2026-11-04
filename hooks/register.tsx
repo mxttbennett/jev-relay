@@ -20,7 +20,8 @@ const state = {
   isManual: false,
   latest: null as Decision | null,
   pending: new Map<string, Promise<Decision | null>>(),
-  directive: null as string | null,
+  byText: new Map<string, Promise<Decision | null>>(),
+  spawned: new Set<string>(),
 }
 
 const fetchLike =
@@ -61,8 +62,10 @@ async function remoteOf($: EngineInterface, cwd: string) {
   }
 }
 
-const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI/i.test(String(err))
+const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI|ENOENT|failed to start/i.test(String(err))
 
+const TYPED_ORIGINS = ['composer', 'bridge', 'sdk']
+const RESULT_PREFIX = 'jev-relay: the subagent finished.'
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']
 const TIERS = ['haiku', 'sonnet', 'opus']
 const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
@@ -109,14 +112,15 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
 async function spawnSibling($: EngineInterface, prompt: string, model: string) {
   const cwd = await $.session.cwd()
   try {
-    await $.process.run(['claude', '--bg', '--model', model, prompt], { cwd, timeoutMs: 30_000 })
-    return true
+    const ran = await $.process.run(['claude', '--bg', '--model', model, prompt], { cwd, timeoutMs: 30_000 })
+    return ran.exitCode === 0
   } catch (err) {
     if (!isUnavailable(err)) return false
   }
   try {
-    await $.agent.spawn({ prompt, model, name: 'jev-sibling', description: 'Handoff from jev-relay', cwd })
-    return true
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: 'Handoff from jev-relay', cwd })
+    if ('agentId' in started) state.spawned.add(started.agentId)
+    return 'agentId' in started
   } catch {
     return false
   }
@@ -125,11 +129,16 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string) {
 async function act($: EngineInterface, prompt: string, decision: Decision): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relay' }).catch(() => null)
+    if (started && 'agentId' in started) {
+      state.spawned.add(started.agentId)
+      return `jev-relay: a subagent (${started.model}) is already working on the user's request. Reply with one short sentence saying so and stop; its result arrives when it finishes.`
+    }
     return `jev-relay: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
   }
   if (decision.placement !== 'sibling') return null
 
-  const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Run in background', 'Keep here'], header: 'jev-relay' })
+  const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Keep here', 'Run in background'], header: 'jev-relay' })
   if (answer !== 'Run in background' || !(await spawnSibling($, prompt, model))) return null
   return `jev-relay: the user's request was handed to a background session (${model}). Reply with one short sentence saying so and stop; do not do the work here.`
 }
@@ -143,7 +152,7 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId || state.isManual || !isOn() || e.text.trim() === '') return result
+    if (e.agentId || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return result
 
     const sessionModel = await $.session.model()
     if (sessionModel !== state.baseline) {
@@ -151,20 +160,20 @@ export const register: Register = on => {
       await publish($, { manual: true })
       return result
     }
-    const pending = decide($, e.text).catch(() => null)
-    state.pending.set(e.turnId, pending)
-    state.directive = null
-
-    const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
-    const decision = await Promise.race([pending, deadline])
-    if (decision) state.directive = await act($, e.text, decision).catch(() => null)
+    state.pending.set(e.turnId, state.byText.get(e.text) ?? decide($, e.text).catch(() => null))
+    state.byText.delete(e.text)
     return result
   })
 
-  on('prompt.compose', async ($, e, next) => {
-    const result = await next(e)
-    if (!state.directive || !e.tools.includes('Agent')) return result
-    return { sections: [...result.sections, { id: 'jev-relay-router:directive', text: state.directive, scope: 'session' as const }] }
+  on('prompt.submit', async ($, e, next) => {
+    if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
+
+    const pending = decide($, e.text).catch(() => null)
+    state.byText.set(e.text, pending)
+    const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
+    const decision = await Promise.race([pending, deadline])
+    const directive = decision ? await act($, e.text, decision).catch(() => null) : null
+    return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
 
   on('turn.step', async function* ($, e, next) {
@@ -194,7 +203,9 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     state.pending.delete(e.turnId)
-    if (!e.agentId) state.directive = null
+    if (e.agentId && state.spawned.delete(e.agentId) && e.answer) {
+      void $.prompt.submit({ text: `${RESULT_PREFIX} Its result:\n\n${e.answer}\n\nTell the user what it found.` })
+    }
     return next(e)
   })
 
