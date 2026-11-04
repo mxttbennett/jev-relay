@@ -82,7 +82,7 @@ Each nudge and each subagent model pick also prints one line to you through the 
 
 The number is the classifier's confidence, shown when it reports one.
 
-By default you only see a line when `jev-relay` acts. Set `"report": "every-turn"` in the config to
+By default you only see a line when `jev-relay` acts, including when an inline verdict switches the model. Set `"report": "every-turn"` in the config to
 see one on every prompt, including the ones it skipped:
 
 ```

@@ -91,7 +91,7 @@ test("degraded notice appears once per session and re-arms after a success", asy
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
   assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
   providers.jev = answer({ placement: "inline", model: "sonnet" }, true);
-  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  assert.deepEqual(await run({ input, agent: "claude", config, deps }), { context: "", notice: "· jev-relay: inline · sonnet" });
   providers.jev = down(true);
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
 });
@@ -163,4 +163,15 @@ test("every-turn reporting says when a turn was skipped, cooling down, or judged
   await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
   const next = await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
   assert.equal(next.notice, "· jev-relay: skipped · cooling down (1/3)");
+});
+
+test("default reporting shows an inline line only when the inline model changes", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "haiku", confidence: 0.9 }, true), heuristics } });
+  // Arrange
+  const first = await run({ input, agent: "claude", config, deps });
+  // Act
+  const repeat = await run({ input, agent: "claude", config, deps });
+  // Assert
+  assert.equal(first.notice, "· jev-relay: inline · haiku · 0.90");
+  assert.equal(repeat, null);
 });

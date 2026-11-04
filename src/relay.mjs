@@ -110,9 +110,12 @@ export async function handlePrompt({ input, agent, config, deps }) {
   } else {
     delete state.nudge;
   }
+  const inlineModel = !result.heuristic && result.verdict.placement === "inline" ? result.verdict.model : null;
+  const switchedInline = inlineModel !== null && inlineModel !== state.inlineModel;
+  if (inlineModel !== null) state.inlineModel = inlineModel;
   deps.state.save(input.session_id, state);
   if (lines.length) return { context: lines.join("\n"), notice: notices.join("\n") };
-  return everyTurn ? { context: "", notice: inlineNotice(result.verdict) } : null;
+  return everyTurn || switchedInline ? { context: "", notice: inlineNotice(result.verdict) } : null;
 }
 
 export async function pickSubagentModel({ input, agent, config, deps }) {
