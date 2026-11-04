@@ -30,6 +30,7 @@ export const DEFAULTS = {
   },
   cooldown: { prompts: 3, growth: 0.25 },
   minConfidence: 0.6,
+  band: { enabled: false },
   report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },

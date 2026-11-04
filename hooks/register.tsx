@@ -166,4 +166,24 @@ export const register: Register = on => {
     const decision = await decide($, e.prompt).catch(() => null)
     return next(decision?.model ? { ...e, model: decision.model } : e)
   })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const verdict = state.latest
+    if (!state.config.band.enabled || !verdict) return next(e)
+
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const target = verdict.model
+    const confidence = verdict.confidence == null ? '' : ` · ${verdict.confidence.toFixed(2)}`
+    const isSwitch = target !== null && !(await $.session.model()).toLowerCase().includes(target.toLowerCase())
+
+    return (
+      <Box>
+        <Text dimColor>
+          jev: {verdict.placement} · {target ?? 'default'}
+          {confidence}{' '}
+        </Text>
+        {isSwitch && <Button key="model" label={`🟢 Switch to ${target}`} onPress={() => $.command.run({ command: 'model', args: target })} />}
+      </Box>
+    )
+  })
 }
