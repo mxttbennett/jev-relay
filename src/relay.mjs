@@ -2,7 +2,7 @@ import { AGENTS } from "./agents.mjs";
 import { runChain } from "./chain.mjs";
 import { isEnabled, repoClass } from "./config.mjs";
 import { shouldClassify } from "./heuristics.mjs";
-import { DEGRADED_NOTICE, buildNudge } from "./nudge.mjs";
+import { DEGRADED_BADGE, DEGRADED_NOTICE, buildNotice, buildNudge } from "./nudge.mjs";
 import { redact } from "./redact.mjs";
 
 const TURN_CHARS = 1500;
@@ -74,8 +74,10 @@ export async function handlePrompt({ input, agent, config, deps }) {
   });
 
   const lines = [];
+  const notices = [];
   if (result.degraded && !state.degradedWarned) {
     lines.push(DEGRADED_NOTICE);
+    notices.push(DEGRADED_BADGE);
     state.degradedWarned = true;
   } else if (!result.heuristic) {
     state.degradedWarned = false;
@@ -86,12 +88,13 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const nudge = buildNudge(result.verdict, { agent, contextTokens });
   if (nudge) {
     lines.push(nudge);
+    notices.push(buildNotice(result.verdict));
     state.nudge = { promptsSince: 0, tokens: contextTokens };
   } else {
     delete state.nudge;
   }
   deps.state.save(input.session_id, state);
-  return lines.length ? lines.join("\n") : null;
+  return lines.length ? { context: lines.join("\n"), notice: notices.join("\n") } : null;
 }
 
 export async function pickSubagentModel({ input, agent, config, deps }) {
