@@ -84,7 +84,8 @@ export async function handlePrompt({ input, agent, config, deps }) {
   if (!result.heuristic && result.verdict.model) {
     state.model = { value: result.verdict.model, at: deps.now() };
   }
-  const nudge = buildNudge(result.verdict, { agent, contextTokens });
+  const modelId = result.verdict.model && (config.tierModels[agent]?.[result.verdict.model] ?? result.verdict.model);
+  const nudge = buildNudge(result.verdict, { agent, contextTokens, modelId });
   if (nudge) {
     lines.push(nudge);
     state.nudge = { promptsSince: 0, tokens: contextTokens };

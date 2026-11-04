@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { DEFAULTS, merge } from "../src/config.mjs";
 import { classifierPrompt, clampModel, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
-import { classify } from "../src/relay.mjs";
+import { classify, handlePrompt } from "../src/relay.mjs";
 
 test("clampModel keeps allowed models, steps up first, then down, and yields null for none", () => {
   assert.equal(clampModel("sonnet", ["haiku", "sonnet"]), "sonnet");
@@ -40,12 +40,42 @@ test("the jev request carries only the allowed models", async () => {
   assert.equal(verdict.model, "sonnet");
 });
 
-test("classify passes the per-agent allowlist, and none for an agent without model picks", async () => {
+test("classify passes each agent its own allowlist, and none when an agent lists none", async () => {
   const seen = [];
   const providers = { heuristics: { remote: false, heuristic: true, run: async (input) => { seen.push(input.models); return { placement: "inline", model: null }; } } };
-  const config = merge(DEFAULTS, { models: { claude: ["haiku", "bogus"] }, chains: { work: ["heuristics"], personal: ["heuristics"] } });
+  const config = merge(DEFAULTS, { models: { claude: ["haiku", "bogus"], codex: [] }, chains: { work: ["heuristics"], personal: ["heuristics"] } });
   const deps = { providers, remoteOf: () => "" };
   await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, deps);
   await classify({ text: "x", prompt: "x", agent: "codex", cwd: "/x" }, config, deps);
   assert.deepEqual(seen, [["haiku"], []]);
+});
+
+test("codex has its own allowlist and its sibling command carries the mapped Codex model", async () => {
+  const seen = [];
+  const jev = { remote: true, heuristic: false, run: async (input) => { seen.push(input.models); return { placement: "sibling", model: "sonnet" }; } };
+  const heuristics = { remote: false, heuristic: true, run: async () => ({ placement: "inline", model: null }) };
+  const config = merge(DEFAULTS, { models: { claude: ["opus"], codex: ["haiku", "sonnet"] } });
+  const deps = {
+    env: {}, now: () => 1_000_000, remoteOf: () => "git@github-personal:mxttbennett/x.git",
+    readTranscript: () => ({ contextTokens: 150000, lastAt: 1_000_000, turns: [] }),
+    providers: { jev, heuristics },
+    state: { load: () => ({}), save() {}, log() {} },
+  };
+  const input = { session_id: "s", prompt: "do the other thing", cwd: "/x", transcript_path: "/t" };
+  const out = await handlePrompt({ input, agent: "codex", config, deps });
+  assert.deepEqual(seen, [["haiku", "sonnet"]]);
+  assert.match(out, /codex exec -m gpt-6\.1-terra "<brief>"/);
+});
+
+test("claude sibling command names the tier, and drops the flag when there is no model", async () => {
+  const config = merge(DEFAULTS, { models: { claude: [] } });
+  const jev = { remote: true, heuristic: false, run: async () => ({ placement: "sibling", model: null }) };
+  const deps = {
+    env: {}, now: () => 1_000_000, remoteOf: () => "git@github-personal:mxttbennett/x.git",
+    readTranscript: () => ({ contextTokens: 150000, lastAt: 1_000_000, turns: [] }),
+    providers: { jev },
+    state: { load: () => ({}), save() {}, log() {} },
+  };
+  const input = { session_id: "s", prompt: "p", cwd: "/x", transcript_path: "/t" };
+  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /run: claude --bg "<brief>"/);
 });

@@ -41,10 +41,18 @@ Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relay/
 
 `models` lists the models the classifier may pick per agent. A pick outside the list is clamped to
 the nearest allowed model, stepping up before down. An agent with no entry gets no model question.
-Only Claude has one: Codex has no subagent model to set.
+Each agent has its own list, so Claude and Codex can allow different tiers.
 
 ```json
-{ "models": { "claude": ["haiku", "sonnet"] } }
+{ "models": { "claude": ["haiku", "sonnet"], "codex": ["haiku", "sonnet", "opus"] } }
+```
+
+`tierModels` maps a tier to the model id an agent uses. Codex defaults to `gpt-6-luna`,
+`gpt-6.1-terra` and `gpt-6.1-sol`, and the sibling nudge becomes `codex exec -m <model> "<brief>"`.
+Override any of them:
+
+```json
+{ "tierModels": { "codex": { "opus": "gpt-6.1-sol" } } }
 ```
 
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,
