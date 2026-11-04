@@ -264,3 +264,14 @@ test("sendNotification titles the notification from the transcript for any calle
   assert.equal(ran[1].at(-1), "jev-relay");
   assert.equal(transcriptPath({ configDir: "/c", cwd: "/a/b_c", id: "i" }), "/c/projects/-a-b-c/i.jsonl");
 });
+
+test("sendNotification finds an ai-title that sits before the last megabyte", async () => {
+  const { sendNotification } = await import("../src/notify.mjs");
+  const ran = [];
+  // Arrange
+  const transcript = '{"type":"ai-title","aiTitle":"Early title"}\n' + '{"type":"user","text":"x"}\n'.repeat(60_000);
+  // Act
+  await sendNotification({ message: "m", readTranscript: () => transcript, run: (argv) => ran.push(argv) });
+  // Assert
+  assert.equal(ran[0].at(-1), "Early title");
+});

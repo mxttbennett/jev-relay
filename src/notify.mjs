@@ -28,6 +28,6 @@ export const transcriptPath = ({ configDir, cwd, id }) =>
 
 export async function sendNotification({ message, readTranscript, run }) {
   const text = await Promise.resolve(readTranscript()).catch(() => "");
-  const title = titleFromTranscript(String(text).slice(-1_000_000));
+  const title = titleFromTranscript(String(text));
   await Promise.resolve(run(notifyCommand(message, title || "jev-relay"))).catch(() => {});
 }
