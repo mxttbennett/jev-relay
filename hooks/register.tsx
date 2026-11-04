@@ -5,7 +5,8 @@ import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { classify } from '../src/relay.mjs'
 
-type Decision = { placement: string; model: string | null; confidence: number | null }
+type Effort = 'low' | 'medium' | 'high'
+type Decision = { placement: string; model: string | null; effort: Effort | null; confidence: number | null }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -62,6 +63,15 @@ async function remoteOf($: EngineInterface, cwd: string) {
 
 const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI/i.test(String(err))
 
+const EFFORTS = ['low', 'medium', 'high', 'xhigh']
+const TIERS = ['haiku', 'sonnet', 'opus']
+const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
+const isAlias = (model: string) => TIERS.includes(model.toLowerCase())
+const isSameModel = (a: string, b: string) => {
+  const [x, y] = [a.toLowerCase(), b.toLowerCase()]
+  return x === y || (isAlias(x) && y.includes(x)) || (isAlias(y) && x.includes(y))
+}
+
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
 async function publish($: EngineInterface, status: Record<string, unknown>) {
@@ -92,10 +102,11 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
     cwd,
   }
   const { result } = await classify(signals, state.config, { providers, remoteOf: () => remote })
-  if (result.heuristic || !result.verdict.model) return null
+  if (result.heuristic || (!result.verdict.model && !result.verdict.effort)) return null
   state.latest = result.verdict
   const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
-  if (state.config.statusNotice) await $.ui.status(`jev → ${result.verdict.model}${confidence}`)
+  const label = [result.verdict.model, result.verdict.effort].filter(Boolean).join(' · ')
+  if (state.config.statusNotice) await $.ui.status(`jev → ${label}${confidence}`)
   return result.verdict
 }
 
@@ -169,9 +180,25 @@ export const register: Register = on => {
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
-    const model = decision?.placement === 'inline' ? decision.model : null
-    if (e.index === 0) void publish($, model ? { tier: model, model } : {})
-    return yield* next(model ? { ...e, model } : e)
+    const current = await $.session.model().catch(() => null)
+    if (current === null) return yield* next(e)
+    if (current !== state.baseline) {
+      state.isManual = true
+      return yield* next(e)
+    }
+    const picked = decision?.placement === 'inline' ? decision.model : null
+    const model = picked && !isSameModel(picked, current) ? picked : null
+    const wanted = decision?.placement === 'inline' ? decision.effort : null
+    const effort = wanted && EFFORTS.includes(wanted) && e.effort !== undefined ? wanted : null
+    const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)
+    for await (const chunk of stream) {
+      if (e.index === 0 && chunk.kind === 'stop') {
+        const served = chunk.usage?.model
+        if (picked && served) void publish($, { tier: tierOf(served), model: served, effort })
+      }
+      yield chunk
+    }
+    return await stream.result
   })
 
   on('turn.complete', async ($, e, next) => {

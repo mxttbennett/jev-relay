@@ -26,7 +26,7 @@ const FACTORIES = {
         options: { temperature: 0.2, num_predict: cfg.numPredict ?? 4096 },
       },
     });
-    return parseVerdict(json.message?.content ?? "", input.models);
+    return parseVerdict(json.message?.content ?? "", input.models, input.efforts);
   },
 
   "openai-compat": (cfg, ctx) => async (input) => {
@@ -52,7 +52,7 @@ const FACTORIES = {
         reasoning_effort: "none",
       },
     });
-    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.models);
+    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.models, input.efforts);
   },
 
   jev: (cfg, ctx) => async (input) => {
@@ -78,15 +78,17 @@ const FACTORIES = {
         const json = await request(ctx.fetch, url, {
           timeoutMs: cfg.timeoutMs,
           headers: { Authorization: `Bearer ${key}` },
-          body: { state: { query: input.text }, model, questions: jevQuestions(input.models) },
+          body: { state: { query: input.text }, model, questions: jevQuestions(input.models, input.efforts) },
         });
         return toVerdict(
           {
             placement: json.answers?.placement?.choice,
             model: json.answers?.model_choice?.choice,
+            effort: json.answers?.effort_choice?.choice,
             confidence: json.answers?.placement?.confidence,
           },
           input.models,
+          input.efforts,
         );
       } catch (err) {
         lastError = new Error(`${name}: ${err.message}`);

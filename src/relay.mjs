@@ -20,12 +20,13 @@ export async function classify(signals, config, deps) {
   const cls = repoClass(config, signals.cwd, deps.remoteOf);
   const { text, hits } = redact(signals.text, config.redact.names);
   const models = config.models[signals.agent] ?? {};
+  const { efforts } = config;
   const names = config.chains[cls].filter(
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
-  const result = await runChain(names, deps.providers, { ...signals, models, text: text.slice(-TEXT_CHARS) });
+  const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) });
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
-  if (low) result.verdict = { placement: "inline", model: null, confidence: result.verdict.confidence };
+  if (low) result.verdict = { placement: "inline", model: null, effort: null, confidence: result.verdict.confidence };
   return { result, cls, hits, low };
 }
 

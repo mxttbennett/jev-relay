@@ -35,6 +35,12 @@ export const DEFAULTS = {
   report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
+  efforts: {
+    low: "Mechanical or lookup work that needs little reasoning",
+    medium: "Typical coding, explanation and review",
+    high: "Hard debugging, design and multi-step reasoning",
+    xhigh: "The hardest work where extra reasoning pays off",
+  },
   redact: { names: [] },
   chains: {
     work: ["qwen-pc", "qwen", "heuristics"],
@@ -72,6 +78,7 @@ export function resolveConfig(user = {}) {
   if (!(config.minConfidence >= 0 && config.minConfidence <= 1)) config.minConfidence = DEFAULTS.minConfidence;
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
+  if (user.efforts) config.efforts = user.efforts;
   return config;
 }
 

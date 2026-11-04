@@ -95,6 +95,14 @@ A remote verdict with confidence below `minConfidence` (default `0.6`) is treate
 nudge and no model pick. Heuristic verdicts are not affected. A value outside 0–1 falls back to the
 default.
 
+## Effort
+
+The same classifier call picks a reasoning effort for the turn (`low`, `medium`, `high` or `xhigh`). The mod
+applies it, along with the model, to inline turns on models that take an effort. The hooks ignore
+it. `efforts` lists the levels the classifier may pick and their descriptions. Set `"efforts": {}`
+to stop asking, or write your own list, which replaces the default. Keys must be `low`, `medium`,
+`high` or `xhigh`; the mod ignores any other level.
+
 ## Mod
 
 `hooks/register.tsx` is also a Claude Code mod, so it works anywhere Claude Code loads mods

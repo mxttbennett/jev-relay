@@ -1,4 +1,4 @@
-const FALLBACK = { placement: "inline", model: null, confidence: null };
+const FALLBACK = { placement: "inline", model: null, effort: null, confidence: null };
 
 export async function runChain(names, providers, input) {
   const failures = [];
