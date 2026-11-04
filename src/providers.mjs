@@ -1,30 +1,10 @@
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { heuristicVerdict } from "./heuristics.mjs";
 import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "./prompt.mjs";
-
-const JEV_ENV = join(homedir(), ".config", "jev-opus", ".env");
-
-function readEnvFile(path) {
-  const env = {};
-  let raw = "";
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch {}
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    const eq = trimmed.indexOf("=");
-    if (!trimmed || trimmed.startsWith("#") || eq === -1) continue;
-    env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
-  }
-  return env;
-}
 
 async function request(fetchFn, url, { body, headers, timeoutMs }) {
   const res = await fetchFn(url, {
     method: body ? "POST" : "GET",
-    signal: AbortSignal.timeout(timeoutMs),
+    timeoutMs,
     headers: { "Content-Type": "application/json", ...headers },
     body: body && JSON.stringify(body),
   });
@@ -76,7 +56,7 @@ const FACTORIES = {
   },
 
   jev: (cfg, ctx) => async (input) => {
-    const env = { ...readEnvFile(JEV_ENV), ...ctx.env };
+    const env = { ...ctx.readJevEnv?.(), ...ctx.env };
     const backends = {
       openrouter: {
         key: env.OPENROUTER_API_KEY,
