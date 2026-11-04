@@ -39,21 +39,27 @@ Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relay/
 { "chains": { "work": ["qwen", "heuristics"] }, "redact": { "names": ["Acme"] } }
 ```
 
-`models` lists the models the classifier may pick per agent. A pick outside the list is clamped to
-the nearest allowed model, stepping up before down. An agent with no entry gets no model question.
-Each agent has its own list, so Claude and Codex can allow different tiers.
+`models` lists the models the classifier may pick, with a separate list for each agent. Each key
+is a model name, in order from weakest to strongest, and each value says what it is good for. The
+classifier reads those descriptions to choose. Delete a line to disallow a model. A list you write
+replaces that agent's default list, so restate every model you want to keep.
 
 ```json
-{ "models": { "claude": ["haiku", "sonnet"], "codex": ["haiku", "sonnet", "opus"] } }
+{
+  "models": {
+    "claude": {
+      "sonnet": "Default day-to-day coding, feature work",
+      "opus": "Architecture, hard debugging, security-sensitive work"
+    }
+  }
+}
 ```
 
-`tierModels` maps a tier to the model id an agent uses. Codex defaults to `gpt-6-luna`,
-`gpt-6.1-terra` and `gpt-6.1-sol`, and the sibling nudge becomes `codex exec -m <model> "<brief>"`.
-Override any of them:
-
-```json
-{ "tierModels": { "codex": { "opus": "gpt-6.1-sol" } } }
-```
+Defaults: Claude allows `haiku`, `sonnet` and `opus`; Codex allows `gpt-6-luna`, `gpt-6.1-terra` and
+`gpt-6.1-sol`. If the classifier answers with a model that is not on the list, that provider's answer
+is rejected and the next provider in the chain runs. An agent with an empty list gets no model
+question. The sibling nudge carries the chosen model: `claude --bg --model <name>` or
+`codex exec -m <name>`.
 
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,
 `TYPESAFE_API_KEY` or `JEV_API_KEY`.

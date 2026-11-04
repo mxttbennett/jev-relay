@@ -3,7 +3,6 @@ import { runChain } from "./chain.mjs";
 import { isEnabled, repoClass } from "./config.mjs";
 import { shouldClassify } from "./heuristics.mjs";
 import { DEGRADED_NOTICE, buildNudge } from "./nudge.mjs";
-import { MODELS } from "./prompt.mjs";
 import { redact } from "./redact.mjs";
 
 const TURN_CHARS = 1500;
@@ -13,7 +12,7 @@ const MODEL_TTL_MS = 10 * 60 * 1000;
 export async function classify(signals, config, deps) {
   const cls = repoClass(config, signals.cwd, deps.remoteOf);
   const { text, hits } = redact(signals.text, config.redact.names);
-  const models = (config.models[signals.agent] ?? []).filter((m) => MODELS.includes(m));
+  const models = config.models[signals.agent] ?? {};
   const names = config.chains[cls].filter(
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
@@ -84,8 +83,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   if (!result.heuristic && result.verdict.model) {
     state.model = { value: result.verdict.model, at: deps.now() };
   }
-  const modelId = result.verdict.model && (config.tierModels[agent]?.[result.verdict.model] ?? result.verdict.model);
-  const nudge = buildNudge(result.verdict, { agent, contextTokens, modelId });
+  const nudge = buildNudge(result.verdict, { agent, contextTokens });
   if (nudge) {
     lines.push(nudge);
     state.nudge = { promptsSince: 0, tokens: contextTokens };

@@ -1,81 +1,87 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { DEFAULTS, merge } from "../src/config.mjs";
-import { classifierPrompt, clampModel, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
+import { DEFAULTS, loadConfig, merge } from "../src/config.mjs";
+import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
 import { classify, handlePrompt } from "../src/relay.mjs";
 
-test("clampModel keeps allowed models, steps up first, then down, and yields null for none", () => {
-  assert.equal(clampModel("sonnet", ["haiku", "sonnet"]), "sonnet");
-  assert.equal(clampModel("haiku", ["sonnet", "opus"]), "sonnet");
-  assert.equal(clampModel("opus", ["haiku", "sonnet"]), "sonnet");
-  assert.equal(clampModel("opus", []), null);
+const two = { haiku: "fast things", sonnet: "everyday things" };
+
+test("a model outside the offered list is rejected, so the chain moves on", () => {
+  assert.equal(toVerdict({ placement: "inline", model: "sonnet" }, two).model, "sonnet");
+  assert.throws(() => toVerdict({ placement: "inline", model: "opus" }, two), /bad model/);
+  assert.throws(() => parseVerdict('{"placement":"inline","model":"gpt"}', two));
+  assert.equal(toVerdict({ placement: "inline" }, {}).model, null);
 });
 
-test("toVerdict clamps a disallowed pick and still rejects a nonsense model", () => {
-  assert.equal(toVerdict({ placement: "inline", model: "opus" }, ["haiku", "sonnet"]).model, "sonnet");
-  assert.throws(() => toVerdict({ placement: "inline", model: "gpt" }, ["sonnet"]));
-  assert.equal(toVerdict({ placement: "inline" }, []).model, null);
-  assert.equal(parseVerdict('{"placement":"subagent","model":"opus"}', ["haiku"]).model, "haiku");
+test("the classifier is only offered the listed models, with their descriptions", () => {
+  const prompt = classifierPrompt({ text: "x", models: two });
+  assert.match(prompt, /- sonnet: everyday things/);
+  assert.doesNotMatch(prompt, /opus/);
+  assert.deepEqual(jevQuestions(two).model_choice.criteria, two);
+  assert.equal(jevQuestions({}).model_choice, undefined);
+  assert.doesNotMatch(classifierPrompt({ text: "x", models: {} }), /"model"/);
 });
 
-test("the classifier is only offered the allowed models", () => {
-  const prompt = classifierPrompt({ text: "x", models: ["haiku", "sonnet"] });
-  assert.match(prompt, /- sonnet:/);
-  assert.doesNotMatch(prompt, /- opus:/);
-  assert.deepEqual(Object.keys(jevQuestions(["haiku"]).model_choice.criteria), ["haiku"]);
-  assert.equal(jevQuestions([]).model_choice, undefined);
-  assert.doesNotMatch(classifierPrompt({ text: "x", models: [] }), /"model"/);
-});
-
-test("the jev request carries only the allowed models", async () => {
+test("the jev request carries only the listed models", async () => {
   let body;
   const fetch = async (_url, init) => {
     body = JSON.parse(init.body);
-    return { ok: true, json: async () => ({ answers: { placement: { choice: "inline" }, model_choice: { choice: "opus" } } }) };
+    return { ok: true, json: async () => ({ answers: { placement: { choice: "inline" }, model_choice: { choice: "sonnet" } } }) };
   };
   const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env: { OPENROUTER_API_KEY: "k" }, fetch });
-  const verdict = await jev.run({ text: "x", models: ["haiku", "sonnet"] });
+  const verdict = await jev.run({ text: "x", models: two });
   assert.deepEqual(Object.keys(body.questions.model_choice.criteria), ["haiku", "sonnet"]);
   assert.equal(verdict.model, "sonnet");
 });
 
-test("classify passes each agent its own allowlist, and none when an agent lists none", async () => {
+test("defaults give claude tier names and codex its own model names", () => {
+  assert.deepEqual(Object.keys(DEFAULTS.models.claude), ["haiku", "sonnet", "opus"]);
+  assert.deepEqual(Object.keys(DEFAULTS.models.codex), ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol"]);
+});
+
+test("a user models list replaces the default list for that agent only", () => {
+  const dir = mkdtempSync(join(tmpdir(), "relay-"));
+  const path = join(dir, "config.json");
+  writeFileSync(path, JSON.stringify({ models: { claude: { sonnet: "only this" } } }));
+  const config = loadConfig(path);
+  assert.deepEqual(config.models.claude, { sonnet: "only this" });
+  assert.deepEqual(Object.keys(config.models.codex), Object.keys(DEFAULTS.models.codex));
+});
+
+test("classify passes each agent its own models, and none when an agent lists none", async () => {
   const seen = [];
-  const providers = { heuristics: { remote: false, heuristic: true, run: async (input) => { seen.push(input.models); return { placement: "inline", model: null }; } } };
-  const config = merge(DEFAULTS, { models: { claude: ["haiku", "bogus"], codex: [] }, chains: { work: ["heuristics"], personal: ["heuristics"] } });
+  const providers = { heuristics: { remote: false, heuristic: true, run: async (input) => { seen.push(Object.keys(input.models)); return { placement: "inline", model: null }; } } };
+  const config = merge(DEFAULTS, { chains: { work: ["heuristics"], personal: ["heuristics"] } });
+  config.models = { claude: two, codex: {} };
   const deps = { providers, remoteOf: () => "" };
   await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, deps);
   await classify({ text: "x", prompt: "x", agent: "codex", cwd: "/x" }, config, deps);
-  assert.deepEqual(seen, [["haiku"], []]);
+  assert.deepEqual(seen, [["haiku", "sonnet"], []]);
 });
 
-test("codex has its own allowlist and its sibling command carries the mapped Codex model", async () => {
-  const seen = [];
-  const jev = { remote: true, heuristic: false, run: async (input) => { seen.push(input.models); return { placement: "sibling", model: "sonnet" }; } };
-  const heuristics = { remote: false, heuristic: true, run: async () => ({ placement: "inline", model: null }) };
-  const config = merge(DEFAULTS, { models: { claude: ["opus"], codex: ["haiku", "sonnet"] } });
-  const deps = {
+function relayDeps(provider) {
+  return {
     env: {}, now: () => 1_000_000, remoteOf: () => "git@github-personal:mxttbennett/x.git",
     readTranscript: () => ({ contextTokens: 150000, lastAt: 1_000_000, turns: [] }),
-    providers: { jev, heuristics },
+    providers: { jev: provider },
     state: { load: () => ({}), save() {}, log() {} },
   };
-  const input = { session_id: "s", prompt: "do the other thing", cwd: "/x", transcript_path: "/t" };
-  const out = await handlePrompt({ input, agent: "codex", config, deps });
-  assert.deepEqual(seen, [["haiku", "sonnet"]]);
+}
+const input = { session_id: "s", prompt: "do the other thing", cwd: "/x", transcript_path: "/t" };
+
+test("codex sibling command carries the Codex model name the classifier chose", async () => {
+  const jev = { remote: true, heuristic: false, run: async () => ({ placement: "sibling", model: "gpt-6.1-terra" }) };
+  const out = await handlePrompt({ input, agent: "codex", config: DEFAULTS, deps: relayDeps(jev) });
   assert.match(out, /codex exec -m gpt-6\.1-terra "<brief>"/);
 });
 
-test("claude sibling command names the tier, and drops the flag when there is no model", async () => {
-  const config = merge(DEFAULTS, { models: { claude: [] } });
-  const jev = { remote: true, heuristic: false, run: async () => ({ placement: "sibling", model: null }) };
-  const deps = {
-    env: {}, now: () => 1_000_000, remoteOf: () => "git@github-personal:mxttbennett/x.git",
-    readTranscript: () => ({ contextTokens: 150000, lastAt: 1_000_000, turns: [] }),
-    providers: { jev },
-    state: { load: () => ({}), save() {}, log() {} },
-  };
-  const input = { session_id: "s", prompt: "p", cwd: "/x", transcript_path: "/t" };
-  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /run: claude --bg "<brief>"/);
+test("claude sibling command names the model, and drops the flag when there is none", async () => {
+  const named = { remote: true, heuristic: false, run: async () => ({ placement: "sibling", model: "sonnet" }) };
+  assert.match(await handlePrompt({ input, agent: "claude", config: DEFAULTS, deps: relayDeps(named) }), /claude --bg --model sonnet "<brief>"/);
+  const none = { remote: true, heuristic: false, run: async () => ({ placement: "sibling", model: null }) };
+  assert.match(await handlePrompt({ input, agent: "claude", config: DEFAULTS, deps: relayDeps(none) }), /run: claude --bg "<brief>"/);
 });
