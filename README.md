@@ -39,21 +39,17 @@ Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relay/
 { "chains": { "work": ["qwen", "heuristics"] }, "redact": { "names": ["Acme"] } }
 ```
 
-`models` lists the models the classifier may pick, with a separate list for each agent. Each key
-is a model name, in order from weakest to strongest, and each value says what it is good for. The
-classifier reads those descriptions to choose. Delete a line to disallow a model. A list you write
-replaces that agent's default list, so restate every model you want to keep.
+`models` lists the models the classifier may pick, with a separate list for each agent. Write a
+list of names, from weakest to strongest. Known models borrow their built-in description, which the
+classifier reads to choose. Delete a name to disallow it. A list you write replaces that agent's
+default list, so name every model you want to keep.
 
 ```json
-{
-  "models": {
-    "claude": {
-      "sonnet": "Default day-to-day coding, feature work",
-      "opus": "Architecture, hard debugging, security-sensitive work"
-    }
-  }
-}
+{ "models": { "claude": ["haiku", "sonnet"], "codex": ["gpt-6-luna"] } }
 ```
+
+A model the built-ins don't know needs a description, so write that agent's list as an object:
+`{ "gpt-x": "what it is good for" }`.
 
 Defaults: Claude allows `haiku`, `sonnet` and `opus`; Codex allows `gpt-6-luna`, `gpt-6.1-terra` and
 `gpt-6.1-sol`. If the classifier answers with a model that is not on the list, that provider's answer

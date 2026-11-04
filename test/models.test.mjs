@@ -85,3 +85,12 @@ test("claude sibling command names the model, and drops the flag when there is n
   const none = { remote: true, heuristic: false, run: async () => ({ placement: "sibling", model: null }) };
   assert.match(await handlePrompt({ input, agent: "claude", config: DEFAULTS, deps: relayDeps(none) }), /run: claude --bg "<brief>"/);
 });
+
+test("a plain list of model names borrows the built-in descriptions; unknown names keep what you wrote", () => {
+  const dir = mkdtempSync(join(tmpdir(), "relay-"));
+  const path = join(dir, "config.json");
+  writeFileSync(path, JSON.stringify({ models: { claude: ["sonnet"], codex: { "gpt-6-luna": "", "gpt-x": "my own model" } } }));
+  const config = loadConfig(path);
+  assert.deepEqual(config.models.claude, { sonnet: DEFAULTS.models.claude.sonnet });
+  assert.deepEqual(config.models.codex, { "gpt-6-luna": DEFAULTS.models.codex["gpt-6-luna"], "gpt-x": "my own model" });
+});

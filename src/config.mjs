@@ -13,6 +13,13 @@ const STRONG =
 const CLAUDE_MODELS = { haiku: FAST, sonnet: BALANCED, opus: STRONG };
 const CODEX_MODELS = { "gpt-6-luna": FAST, "gpt-6.1-terra": BALANCED, "gpt-6.1-sol": STRONG };
 
+const KNOWN_MODELS = { ...CLAUDE_MODELS, ...CODEX_MODELS };
+
+export function describeModels(models) {
+  const entries = Array.isArray(models) ? models.map((name) => [name, ""]) : Object.entries(models);
+  return Object.fromEntries(entries.map(([name, why]) => [name, why || KNOWN_MODELS[name] || ""]));
+}
+
 export const DEFAULTS = {
   agents: { claude: { enabled: true }, codex: { enabled: true } },
   gate: { contextTokens: 100000, cacheTtlMs: 300000, coldMinTokens: 20000 },
@@ -57,7 +64,8 @@ export function loadConfig(path = CONFIG_PATH) {
     user = JSON.parse(readFileSync(path, "utf8"));
   } catch {}
   const config = merge(DEFAULTS, user);
-  config.models = { ...DEFAULTS.models, ...user.models };
+  const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
+  config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
   return config;
 }
 
