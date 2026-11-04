@@ -159,3 +159,23 @@ test("toggle writes per-agent flags and reports status", () => {
   assert.throws(() => resolveAgents("gemini"));
   assert.equal(loadConfig(path).agents.codex.enabled, true);
 });
+
+test("a heavy prompt opens the gate from the lower floor, and an ordinary one does not", () => {
+  const at = (contextTokens, prompt) => shouldClassify({ contextTokens, idleMs: 0, prompt }, gate);
+  assert.equal(at(85000, "alright /peer-review-pr"), true);
+  assert.equal(at(85000, "fix the typo in the readme"), false);
+  assert.equal(at(25000, "/peer-review-pr"), false);
+  assert.equal(at(50000, "audit the whole repo for leaks"), true);
+  assert.equal(at(50000, "please use /parallel here"), true);
+  assert.equal(at(50000, "what does peer-review-pr do"), false);
+});
+
+test("an invalid heavy pattern is ignored instead of breaking the gate", () => {
+  const broken = { ...gate, heavyPatterns: ["(", "\\bboom\\b"] };
+  assert.equal(shouldClassify({ contextTokens: 50000, idleMs: 0, prompt: "boom" }, broken), true);
+  assert.equal(shouldClassify({ contextTokens: 50000, idleMs: 0, prompt: "calm" }, broken), false);
+});
+
+test("heuristics call a heavy slash command a subagent task once the gate is open", () => {
+  assert.equal(heuristicVerdict({ prompt: "/deep-plan x", contextTokens: 60000, idleMs: 0 }, gate).placement, "subagent");
+});

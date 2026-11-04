@@ -3,17 +3,30 @@ const FAN_OUT =
 const INDEPENDENT =
   /\b(unrelated|separate (task|thing)|different (task|thing)|new task|meanwhile|in the background)\b/i;
 
-export function shouldClassify({ contextTokens, idleMs }, gate) {
+function matches(patterns, prompt) {
+  return patterns.some((source) => {
+    try {
+      return new RegExp(source, "i").test(prompt);
+    } catch {
+      return false;
+    }
+  });
+}
+
+export const isHeavy = (prompt, gate) => matches(gate.heavyPatterns, prompt ?? "");
+
+export function shouldClassify({ contextTokens, idleMs, prompt }, gate) {
   if (contextTokens >= gate.contextTokens) return true;
-  return idleMs >= gate.cacheTtlMs && contextTokens >= gate.coldMinTokens;
+  if (idleMs >= gate.cacheTtlMs && contextTokens >= gate.coldMinTokens) return true;
+  return contextTokens >= gate.heavyFloorTokens && isHeavy(prompt, gate);
 }
 
 export function heuristicVerdict({ prompt, contextTokens, idleMs }, gate) {
-  const costly = shouldClassify({ contextTokens, idleMs }, gate);
-  if (costly && INDEPENDENT.test(prompt)) {
+  const open = shouldClassify({ contextTokens, idleMs, prompt }, gate);
+  if (open && INDEPENDENT.test(prompt)) {
     return { placement: "sibling", model: null, confidence: 0.5 };
   }
-  if (costly && FAN_OUT.test(prompt)) {
+  if (open && (FAN_OUT.test(prompt) || isHeavy(prompt, gate))) {
     return { placement: "subagent", model: null, confidence: 0.5 };
   }
   return { placement: "inline", model: null, confidence: 0.5 };

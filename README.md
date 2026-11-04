@@ -16,6 +16,14 @@ Started from [psadventure/jev-model-router](https://github.com/psadventure/jev-m
 - A sibling verdict tells the model to write a handoff brief, show it to you, and run
   `claude --bg` (or `codex exec`) after you approve.
 
+## When it classifies
+
+The hook skips a prompt unless the conversation is large (`gate.contextTokens`, 100k), the cache
+is cold on a context of at least `gate.coldMinTokens` (20k), or the prompt looks heavy and the
+context is at least `gate.heavyFloorTokens` (40k). A heavy prompt is one that matches a regex in
+`gate.heavyPatterns`: by default fan-out slash commands such as `/peer-review-pr` and `/deep-plan`,
+and phrases such as "audit the whole repo". A list you write replaces the default list.
+
 ## Classifier chains
 
 Each repo class tries its providers in order and uses the first that answers.

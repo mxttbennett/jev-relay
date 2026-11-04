@@ -22,7 +22,19 @@ export function describeModels(models) {
 
 export const DEFAULTS = {
   agents: { claude: { enabled: true }, codex: { enabled: true } },
-  gate: { contextTokens: 100000, cacheTtlMs: 300000, coldMinTokens: 20000 },
+  gate: {
+    contextTokens: 100000,
+    cacheTtlMs: 300000,
+    coldMinTokens: 20000,
+    heavyFloorTokens: 40000,
+    heavyPatterns: [
+      "(^|\\s)/(peer-review-pr|deep-plan|quick-wins|untested|code-review|security-review|parallel|babysit-pr|update-cogniform-sdk|archive-transcripts)\\b",
+      "\\b(audit|review) (the )?(whole|entire|all)\\b",
+      "\\bacross (the )?(repo|codebase)\\b",
+      "\\bfind all\\b",
+      "\\bevery (file|usage|place)\\b",
+    ],
+  },
   cooldown: { prompts: 3, growth: 0.25 },
   report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
