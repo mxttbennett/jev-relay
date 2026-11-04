@@ -1,0 +1,6 @@
+{
+  "name": "jev-relay-band",
+  "version": "0.1.0",
+  "description": "A band above the terminal prompt showing whether jev-relay is on and the model it picked for the session.",
+  "types": "./types/index.d.ts"
+}
