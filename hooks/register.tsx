@@ -3,6 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isEnabled, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
+import { decisionLabel, isChange, notifyCommand } from '../src/notify.mjs'
+import { sessionTitle } from '../src/transcripts.mjs'
 import { classify } from '../src/relay.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
@@ -87,6 +89,15 @@ async function publish($: EngineInterface, status: Record<string, unknown>) {
   }
 }
 
+async function notify($: EngineInterface, message: string) {
+  const home = (await $.env.get('HOME')) ?? ''
+  const cwd = await $.session.cwd()
+  const id = await $.session.id()
+  const transcript = `${home}/.claude/projects/${cwd.replace(/[^a-zA-Z0-9]/g, '-')}/${id}.jsonl`
+  const [cmd, ...args] = notifyCommand(message, sessionTitle(transcript) || 'jev-relay')
+  await $.process.run([cmd, ...args], { timeoutMs: 3000 }).catch(() => {})
+}
+
 async function decide($: EngineInterface, prompt: string): Promise<Decision | null> {
   const providers = createProviders(state.config, {
     config: state.config,
@@ -106,7 +117,9 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
   }
   const { result } = await classify(signals, state.config, { providers, remoteOf: () => remote })
   if (result.heuristic || (!result.verdict.model && !result.verdict.effort)) return null
+  const changed = isChange(state.latest, result.verdict)
   state.latest = result.verdict
+  if (state.config.macNotifications && changed) void notify($, decisionLabel(result.verdict))
   const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
   const label = [result.verdict.model, result.verdict.effort].filter(Boolean).join(' · ')
   if (state.config.statusNotice) await $.ui.status(`jev → ${label}${confidence}`)

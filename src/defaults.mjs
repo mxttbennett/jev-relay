@@ -32,6 +32,7 @@ export const DEFAULTS = {
   minConfidence: 0.6,
   band: { enabled: false },
   statusNotice: true,
+  macNotifications: false,
   report: "changes",
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
