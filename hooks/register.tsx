@@ -64,6 +64,16 @@ const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable
 
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
+async function publish($: EngineInterface, status: Record<string, unknown>) {
+  try {
+    const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/+$/, '')
+    const id = (await $.session.id()).replace(/[^\w-]/g, '')
+    await $.fs.write(`${tmp}/jev-claude/${id}.json`, JSON.stringify(status))
+  } catch {
+    // The status line is cosmetic and must never interfere with a turn.
+  }
+}
+
 async function decide($: EngineInterface, prompt: string): Promise<Decision | null> {
   const providers = createProviders(state.config, {
     config: state.config,
@@ -131,6 +141,7 @@ export const register: Register = on => {
     state.baseline ??= sessionModel
     if (sessionModel !== state.baseline) {
       state.isManual = true
+      await publish($, { manual: true })
       return result
     }
     const pending = decide($, e.text).catch(() => null)
@@ -154,7 +165,9 @@ export const register: Register = on => {
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
-    return yield* next(decision?.placement === 'inline' && decision.model ? { ...e, model: decision.model } : e)
+    const model = decision?.placement === 'inline' ? decision.model : null
+    if (e.index === 0) await publish($, model ? { tier: model, model } : {})
+    return yield* next(model ? { ...e, model } : e)
   })
 
   on('turn.complete', async ($, e, next) => {
