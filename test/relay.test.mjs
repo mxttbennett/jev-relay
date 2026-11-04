@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, merge } from "../src/config.mjs";
-import { handlePrompt, pickSubagentModel } from "../src/relay.mjs";
+import { handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
+
+const handlePrompt = async (args) => (await run(args))?.context ?? null;
 
 function setup({ providers, config = DEFAULTS, snapshot, remote = "git@github-personal:mxttbennett/x.git" } = {}) {
   const store = new Map();
@@ -101,4 +103,15 @@ test("subagent model pick skips explicit models and forks, and classifies on a c
   assert.equal(await call({ prompt: "p", model: "haiku" }), null);
   assert.equal(await call({ prompt: "p", subagent_type: "fork" }), null);
   assert.equal(await call({ prompt: "p" }), "opus");
+});
+
+test("each nudge carries a short user-facing notice, and the degraded warning has its own", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
+  assert.equal((await run({ input, agent: "claude", config, deps })).notice, "↪ jev-relay: subagent · haiku");
+
+  const sibling = setup({ providers: { jev: answer({ placement: "sibling", model: null }, true), heuristics } });
+  assert.equal((await run({ input, agent: "claude", config: sibling.config, deps: sibling.deps })).notice, "↪ jev-relay: sibling session");
+
+  const down = setup({ providers: { jev: { remote: true, heuristic: false, run: async () => { throw new Error("x"); } }, heuristics } });
+  assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relay: no classifier answered, using heuristics");
 });

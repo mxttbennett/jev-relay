@@ -60,6 +60,18 @@ question. The sibling nudge carries the chosen model: `claude --bg --model <name
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,
 `TYPESAFE_API_KEY` or `JEV_API_KEY`.
 
+## Feedback
+
+Each nudge and each subagent model pick also prints one line to you through the hook's
+`systemMessage` field. The model sees the full advice, and you see this:
+
+```
+↪ jev-relay: subagent · sonnet
+↪ jev-relay: sibling session · sonnet
+↪ jev-relay: subagent model → haiku
+⚠ jev-relay: no classifier answered, using heuristics
+```
+
 ## Toggle
 
 ```bash

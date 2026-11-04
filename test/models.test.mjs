@@ -6,7 +6,9 @@ import { test } from "node:test";
 import { DEFAULTS, loadConfig, merge } from "../src/config.mjs";
 import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
-import { classify, handlePrompt } from "../src/relay.mjs";
+import { classify, handlePrompt as run } from "../src/relay.mjs";
+
+const handlePrompt = async (args) => (await run(args))?.context ?? null;
 
 const two = { haiku: "fast things", sonnet: "everyday things" };
 

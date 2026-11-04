@@ -9,16 +9,17 @@ try {
   let raw = "";
   for await (const chunk of process.stdin) raw += chunk;
   const config = loadConfig();
-  const context = await handlePrompt({
+  const advice = await handlePrompt({
     input: JSON.parse(raw),
     agent,
     config,
     deps: defaultDeps(agent, config),
   });
-  if (context) {
+  if (advice) {
     console.log(
       JSON.stringify({
-        hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context },
+        systemMessage: advice.notice,
+        hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: advice.context },
       }),
     );
   }

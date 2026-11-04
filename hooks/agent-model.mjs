@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { loadConfig } from "../src/config.mjs";
 import { defaultDeps } from "../src/deps.mjs";
+import { modelNotice } from "../src/nudge.mjs";
 import { pickSubagentModel } from "../src/relay.mjs";
 
 const agent = process.argv[2] ?? "claude";
@@ -15,6 +16,7 @@ try {
   if (model) {
     console.log(
       JSON.stringify({
+        systemMessage: modelNotice(model),
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           updatedInput: { ...input.tool_input, model },
