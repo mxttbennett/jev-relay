@@ -207,3 +207,28 @@ test("the status notice is on by default and a user config can turn it off", () 
   assert.equal(defaults.statusNotice, true);
   assert.equal(overridden.statusNotice, false);
 });
+
+test("notification helpers build an escape-free osascript call and detect changes", async () => {
+  const { notifyCommand, decisionLabel, isChange } = await import("../src/notify.mjs");
+  // Arrange
+  const verdict = { placement: "inline", model: "haiku", effort: "low", confidence: 0.9 };
+  // Act & Assert
+  assert.deepEqual(notifyCommand('say "hi"').slice(-2), ['say "hi"', "jev-relay"]);
+  assert.equal(decisionLabel(verdict), "inline · haiku · low · 0.90");
+  assert.equal(isChange(null, verdict), true);
+  assert.equal(isChange(verdict, { ...verdict, confidence: 0.5 }), false);
+  assert.equal(isChange(verdict, { ...verdict, model: "opus" }), true);
+});
+
+test("session title is the latest ai-title in the transcript", async () => {
+  const { sessionTitle } = await import("../src/transcripts.mjs");
+  const { writeFileSync, mkdtempSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  // Arrange
+  const path = join(mkdtempSync(join(tmpdir(), "jr-")), "s.jsonl");
+  writeFileSync(path, ['{"type":"ai-title","aiTitle":"old"}', '{"type":"user"}', '{"type":"ai-title","aiTitle":"new name"}'].join("\n") + "\n");
+  // Act & Assert
+  assert.equal(sessionTitle(path), "new name");
+  assert.equal(sessionTitle("/nope/missing.jsonl"), "");
+});

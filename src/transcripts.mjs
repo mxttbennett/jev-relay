@@ -93,3 +93,13 @@ export function codexLine(record) {
   }
   return null;
 }
+
+export function sessionTitle(path) {
+  try {
+    const lines = readTail(path).split("\n").reverse();
+    const hit = lines.find((line) => line.includes('"ai-title"'));
+    return hit ? JSON.parse(hit).aiTitle ?? "" : "";
+  } catch {
+    return "";
+  }
+}
