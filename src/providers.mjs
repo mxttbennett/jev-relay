@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { heuristicVerdict } from "./heuristics.mjs";
-import { JEV_QUESTIONS, classifierPrompt, parseVerdict, toVerdict } from "./prompt.mjs";
+import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "./prompt.mjs";
 
 const JEV_ENV = join(homedir(), ".config", "jev-opus", ".env");
 
@@ -46,7 +46,7 @@ const FACTORIES = {
         options: { temperature: 0.2, num_predict: cfg.numPredict ?? 4096 },
       },
     });
-    return parseVerdict(json.message?.content ?? "");
+    return parseVerdict(json.message?.content ?? "", input.models);
   },
 
   "openai-compat": (cfg, ctx) => async (input) => {
@@ -72,7 +72,7 @@ const FACTORIES = {
         reasoning_effort: "none",
       },
     });
-    return parseVerdict(json.choices?.[0]?.message?.content ?? "");
+    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.models);
   },
 
   jev: (cfg, ctx) => async (input) => {
@@ -98,13 +98,16 @@ const FACTORIES = {
         const json = await request(ctx.fetch, url, {
           timeoutMs: cfg.timeoutMs,
           headers: { Authorization: `Bearer ${key}` },
-          body: { state: { query: input.text }, model, questions: JEV_QUESTIONS },
+          body: { state: { query: input.text }, model, questions: jevQuestions(input.models) },
         });
-        return toVerdict({
-          placement: json.answers?.placement?.choice,
-          model: json.answers?.model_choice?.choice,
-          confidence: json.answers?.placement?.confidence,
-        });
+        return toVerdict(
+          {
+            placement: json.answers?.placement?.choice,
+            model: json.answers?.model_choice?.choice,
+            confidence: json.answers?.placement?.confidence,
+          },
+          input.models,
+        );
       } catch (err) {
         lastError = new Error(`${name}: ${err.message}`);
       }

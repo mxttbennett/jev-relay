@@ -10,6 +10,7 @@ export const DEFAULTS = {
   gate: { contextTokens: 100000, cacheTtlMs: 300000, coldMinTokens: 20000 },
   cooldown: { prompts: 3, growth: 0.25 },
   personalRemotePatterns: ["mxttbennett", "github-personal"],
+  models: { claude: ["haiku", "sonnet", "opus"] },
   redact: { names: [] },
   chains: {
     work: ["qwen-pc", "qwen", "heuristics"],

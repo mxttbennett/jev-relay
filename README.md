@@ -39,6 +39,14 @@ Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relay/
 { "chains": { "work": ["qwen", "heuristics"] }, "redact": { "names": ["Acme"] } }
 ```
 
+`models` lists the models the classifier may pick per agent. A pick outside the list is clamped to
+the nearest allowed model, stepping up before down. An agent with no entry gets no model question.
+Only Claude has one: Codex has no subagent model to set.
+
+```json
+{ "models": { "claude": ["haiku", "sonnet"] } }
+```
+
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,
 `TYPESAFE_API_KEY` or `JEV_API_KEY`.
 
