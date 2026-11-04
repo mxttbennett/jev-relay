@@ -66,7 +66,11 @@ const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']
 const TIERS = ['haiku', 'sonnet', 'opus']
 const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
-const isSameModel = (a: string, b: string) => a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase())
+const isAlias = (model: string) => TIERS.includes(model.toLowerCase())
+const isSameModel = (a: string, b: string) => {
+  const [x, y] = [a.toLowerCase(), b.toLowerCase()]
+  return x === y || (isAlias(x) && y.includes(x)) || (isAlias(y) && x.includes(y))
+}
 
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
@@ -176,7 +180,12 @@ export const register: Register = on => {
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([state.pending.get(e.turnId), deadline])
-    const current = await $.session.model()
+    const current = await $.session.model().catch(() => null)
+    if (current === null) return yield* next(e)
+    if (current !== state.baseline) {
+      state.isManual = true
+      return yield* next(e)
+    }
     const picked = decision?.placement === 'inline' ? decision.model : null
     const model = picked && !isSameModel(picked, current) ? picked : null
     const wanted = decision?.placement === 'inline' ? decision.effort : null
