@@ -4,7 +4,8 @@ import { isEnabled, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { decisionLabel, isChange, notifyCommand, titleFromTranscript } from '../src/notify.mjs'
-import { classify } from '../src/relay.mjs'
+import { classify, classifyFields } from '../src/relay.mjs'
+import { createBufferedLog } from '../src/buffered-log.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
 type Decision = { placement: string; model: string | null; effort: Effort | null; confidence: number | null }
@@ -23,6 +24,9 @@ const state = {
   pending: new Map<string, Promise<Decision | null>>(),
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
+  home: '',
+  missed: new WeakSet<object>(),
+  logs: new Map<string, (entry: Record<string, unknown>) => Promise<void>>(),
 }
 
 const fetchLike =
@@ -35,6 +39,7 @@ const fetchLike =
 
 async function load($: EngineInterface) {
   const home = (await $.env.get('HOME')) ?? ''
+  state.home = home
   try {
     state.config = resolveConfig(JSON.parse(await $.fs.read(`${home}/.config/jev-relay/config.json`)))
   } catch {
@@ -88,6 +93,20 @@ async function publish($: EngineInterface, status: Record<string, unknown>) {
   }
 }
 
+async function record($: EngineInterface, entry: Record<string, unknown>) {
+  try {
+    const session = (await $.session.id()).replace(/[^\w-]/g, '')
+    if (!state.logs.has(session)) {
+      const path = `${state.home}/.local/state/jev-relay/mod/${session}.jsonl`
+      const existing = await $.fs.read(path).catch(() => '')
+      state.logs.set(session, createBufferedLog(text => $.fs.write(path, text), typeof existing === 'string' ? existing : ''))
+    }
+    await state.logs.get(session)!({ agent: 'claude', session, ...entry })
+  } catch {
+    // Metrics are best effort and must never interfere with a turn.
+  }
+}
+
 async function notify($: EngineInterface, message: string) {
   const home = (await $.env.get('HOME')) ?? ''
   const cwd = await $.session.cwd()
@@ -98,7 +117,7 @@ async function notify($: EngineInterface, message: string) {
   await $.process.run([cmd, ...args], { timeoutMs: 3000 }).catch(() => {})
 }
 
-async function decide($: EngineInterface, prompt: string): Promise<Decision | null> {
+async function decide($: EngineInterface, prompt: string, trigger: string): Promise<Decision | null> {
   const providers = createProviders(state.config, {
     config: state.config,
     env: state.env,
@@ -115,7 +134,15 @@ async function decide($: EngineInterface, prompt: string): Promise<Decision | nu
     idleMs: 0,
     cwd,
   }
-  const { result } = await classify(signals, state.config, { providers, remoteOf: () => remote })
+  const classified = await classify(signals, state.config, { providers, remoteOf: () => remote })
+  const { result } = classified
+  void record($, {
+    event: 'decision',
+    trigger,
+    contextTokens: signals.contextTokens,
+    promptChars: prompt.length,
+    ...classifyFields(classified),
+  })
   if (result.heuristic || (!result.verdict.model && !result.verdict.effort)) return null
   const changed = isChange(state.latest, result.verdict)
   state.latest = result.verdict
@@ -149,14 +176,24 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
     const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relay' }).catch(() => null)
     if (started && 'agentId' in started) {
       state.spawned.add(started.agentId)
+      void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
       return `jev-relay: a subagent (${started.model}) is already working on the user's request. Reply with one short sentence saying so and stop; its result arrives when it finishes.`
     }
+    void record($, { event: 'action', placement: 'subagent', outcome: 'delegated-to-model', model })
     return `jev-relay: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
   }
   if (decision.placement !== 'sibling') return null
 
   const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Keep here', 'Run in background'], header: 'jev-relay' })
-  if (answer !== 'Run in background' || !(await spawnSibling($, prompt, model))) return null
+  if (answer !== 'Run in background') {
+    void record($, { event: 'action', placement: 'sibling', outcome: 'declined', model })
+    return null
+  }
+  if (!(await spawnSibling($, prompt, model))) {
+    void record($, { event: 'action', placement: 'sibling', outcome: 'spawn-failed', model })
+    return null
+  }
+  void record($, { event: 'action', placement: 'sibling', outcome: 'accepted', model })
   return `jev-relay: the user's request was handed to a background session (${model}). Reply with one short sentence saying so and stop; do not do the work here.`
 }
 
@@ -174,10 +211,11 @@ export const register: Register = on => {
     const sessionModel = await $.session.model()
     if (sessionModel !== state.baseline) {
       state.isManual = true
+      void record($, { event: 'manual', where: 'turn.start', baseline: state.baseline, model: sessionModel })
       await publish($, { manual: true })
       return result
     }
-    state.pending.set(e.turnId, state.byText.get(e.text) ?? decide($, e.text).catch(() => null))
+    state.pending.set(e.turnId, state.byText.get(e.text) ?? decide($, e.text, 'turn').catch(() => null))
     state.byText.delete(e.text)
     return result
   })
@@ -185,10 +223,14 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
 
-    const pending = decide($, e.text).catch(() => null)
+    const pending = decide($, e.text, 'submit').catch(() => null)
     state.byText.set(e.text, pending)
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([pending, deadline])
+    if (decision === undefined) {
+      state.missed.add(pending)
+      void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
+    }
     const directive = decision ? await act($, e.text, decision).catch(() => null) : null
     return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
@@ -201,11 +243,17 @@ export const register: Register = on => {
     }
 
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
-    const decision = await Promise.race([state.pending.get(e.turnId), deadline])
+    const pending = state.pending.get(e.turnId)
+    const decision = await Promise.race([pending, deadline])
+    if (decision === undefined && pending && !state.missed.has(pending) && e.index === 0) {
+      state.missed.add(pending)
+      void record($, { event: 'deadline-miss', where: 'step', deadlineMs: DEADLINE_MS })
+    }
     const current = await $.session.model().catch(() => null)
     if (current === null) return yield* next(e)
     if (current !== state.baseline) {
       state.isManual = true
+      void record($, { event: 'manual', where: 'turn.step', baseline: state.baseline, model: current })
       return yield* next(e)
     }
     const picked = decision?.placement === 'inline' ? decision.model : null
@@ -216,6 +264,20 @@ export const register: Register = on => {
     for await (const chunk of stream) {
       if (e.index === 0 && chunk.kind === 'stop') {
         const served = chunk.usage?.model
+        void record($, {
+          event: 'applied',
+          placement: decision?.placement ?? null,
+          picked,
+          effortWanted: wanted,
+          effortApplied: effort,
+          sessionModel: current,
+          switched: Boolean(model),
+          served: served ?? null,
+          servedMatches: picked && served ? isSameModel(picked, served) : null,
+          inputTokens: chunk.usage?.input_tokens ?? null,
+          cacheReadTokens: chunk.usage?.cache_read_input_tokens ?? null,
+          outputTokens: chunk.usage?.output_tokens ?? null,
+        })
         if (picked && served) void publish($, { tier: tierOf(served), model: served, effort })
       }
       yield chunk
@@ -233,8 +295,12 @@ export const register: Register = on => {
 
   on('agent.spawn', async ($, e, next) => {
     if (e.fork || e.model || !isOn()) return next(e)
-    const deadline = new Promise<null>(resolve => $.clock.after(DEADLINE_MS, () => resolve(null)))
-    const decision = await Promise.race([decide($, e.prompt).catch(() => null), deadline])
+    const timedOut = Symbol('timeout')
+    const deadline = new Promise<typeof timedOut>(resolve => $.clock.after(DEADLINE_MS, () => resolve(timedOut)))
+    const raced = await Promise.race([decide($, e.prompt, 'spawn').catch(() => null), deadline])
+    const decision = raced === timedOut ? null : raced
+    if (raced === timedOut) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
+    void record($, { event: 'spawn-model', picked: decision?.model ?? null })
     return next(decision?.model ? { ...e, model: decision.model } : e)
   })
 
