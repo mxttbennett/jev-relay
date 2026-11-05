@@ -13,6 +13,7 @@ type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
 const TURN_CHARS = 1500
+const SIBLING_QUIET_PROMPTS = 10
 
 const state = {
   config: resolveConfig(),
@@ -25,6 +26,7 @@ const state = {
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
   typedPrompts: 0,
+  siblingQuietUntil: 0,
   home: '',
   missed: new WeakSet<object>(),
   logs: new Map<string, (entry: Record<string, unknown>) => Promise<void>>(),
@@ -187,8 +189,13 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
   }
   if (decision.placement !== 'sibling') return null
 
+  if (state.typedPrompts <= state.siblingQuietUntil) {
+    void record($, { event: 'action', placement: 'sibling', outcome: 'quiet-after-decline', model })
+    return null
+  }
   const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Keep here', 'Run in background'], header: 'jev-relay' })
   if (answer !== 'Run in background') {
+    state.siblingQuietUntil = state.typedPrompts + SIBLING_QUIET_PROMPTS
     void record($, { event: 'action', placement: 'sibling', outcome: 'declined', model })
     return null
   }
@@ -204,6 +211,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await load($)
     state.typedPrompts = 0
+    state.siblingQuietUntil = 0
     state.baseline = await $.session.model()
     return next(e)
   })

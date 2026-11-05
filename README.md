@@ -95,6 +95,9 @@ A remote verdict with confidence below `minConfidence` (default `0.6`) is treate
 nudge and no model pick. Heuristic verdicts are not affected. A value outside 0–1 falls back to the
 default.
 
+A sibling verdict (background session) needs more: confidence of at least `siblingMinConfidence` (default
+`0.85`), or it is treated as inline. The first prompt of a session never gets a sibling verdict.
+
 Set `"macNotifications": true` to also get a native macOS notification whenever `jev-relay` acts or the
 decision changes (the same moments as the default `changes` reporting). It is off by default.
 
