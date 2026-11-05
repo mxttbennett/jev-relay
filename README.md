@@ -1,6 +1,6 @@
 # jev-relay
 
-Per-task routing for Claude Code and Codex. On each prompt it decides whether the work should
+Per-task Jev routing for Claude Code and Codex. On each prompt it decides whether the work should
 run inline, in a subagent or in a sibling session, and it picks the subagent model.
 
 Started from [psadventure/jev-model-router](https://github.com/psadventure/jev-model-router)
