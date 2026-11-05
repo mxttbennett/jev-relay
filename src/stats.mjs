@@ -112,6 +112,7 @@ export function summarize(events) {
       heuristicRate: rate(decisions.filter(isHeuristic).length, decisions.length),
       redactionHitRate: rate(decisions.filter((e) => e.redactionHits > 0).length, decisions.length),
       latencyMs: { p50: percentile(lat, 50), p95: percentile(lat, 95), max: lat.length ? Math.max(...lat) : null },
+      hookCrashes: sorted(count(of("crash"), (e) => `${e.hook}: ${e.error}`)),
       deadlineMisses: of("deadline-miss").length,
       deadlineMissRate: rate(of("deadline-miss").length, decisions.length),
       providers: providerStats,
@@ -171,7 +172,8 @@ export function formatSummary(s) {
     "Health",
     `  degraded ${pct(s.health.degradedRate)} · heuristic fallback ${pct(s.health.heuristicRate)} · redaction hits ${pct(s.health.redactionHitRate)}`,
     `  latency p50 ${ms(s.health.latencyMs.p50)} · p95 ${ms(s.health.latencyMs.p95)} · max ${ms(s.health.latencyMs.max)}`,
-    `  deadline misses ${s.health.deadlineMisses} (${pct(s.health.deadlineMissRate)})`,
+    `  deadline misses ${s.health.deadlineMisses} (${pct(s.health.deadlineMissRate)}) · hook crashes ${Object.values(s.health.hookCrashes).reduce((a, b) => a + b, 0)}`,
+    ...(Object.keys(s.health.hookCrashes).length ? ["  crashes:", table(s.health.hookCrashes)] : []),
     "  providers:",
     ...Object.entries(s.health.providers).map(
       ([n, p]) => `    ${n}: answered ${p.answered} (${pct(p.answerRate)}), failures ${p.failures}, p50 ${ms(p.p50Ms)}, p95 ${ms(p.p95Ms)}`,
