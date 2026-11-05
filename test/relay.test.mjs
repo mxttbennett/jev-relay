@@ -178,6 +178,8 @@ test("default reporting shows an inline line only when the inline model changes"
 });
 
 test("a sibling verdict on the first prompt of a session is not offered", async () => {
-  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet", confidence: 0.9 }, true), heuristics } });
+  const { deps, config, logs } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet", confidence: 0.9 }, true), heuristics } });
   assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  assert.equal(logs[0].downgraded, "first-prompt");
+  assert.equal(logs[0].rawVerdict.placement, "sibling");
 });

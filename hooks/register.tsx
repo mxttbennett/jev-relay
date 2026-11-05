@@ -122,7 +122,7 @@ async function notify($: EngineInterface, message: string) {
   })
 }
 
-async function decide($: EngineInterface, prompt: string, trigger: string): Promise<Decision | null> {
+async function decide($: EngineInterface, prompt: string, trigger: string, isFirstPrompt = false): Promise<Decision | null> {
   const providers = createProviders(state.config, {
     config: state.config,
     env: state.env,
@@ -138,6 +138,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string): Prom
     contextTokens: (await $.session.usage()).context.tokens ?? 0,
     idleMs: 0,
     cwd,
+    isFirstPrompt,
   }
   const classified = await classify(signals, state.config, { providers, remoteOf: () => remote, breaker })
   const { result } = classified
@@ -234,7 +235,7 @@ export const register: Register = on => {
     if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
 
     const isFirstPrompt = state.typedPrompts++ === 0
-    const pending = decide($, e.text, 'submit').catch(() => null)
+    const pending = decide($, e.text, 'submit', isFirstPrompt).catch(() => null)
     state.byText.set(e.text, pending)
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([pending, deadline])
