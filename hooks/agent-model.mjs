@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { defaultDeps } from "../src/deps.mjs";
 import { createStateStore } from "../src/state.mjs";
@@ -6,6 +7,8 @@ import { modelNotice } from "../src/nudge.mjs";
 import { pickSubagentModel } from "../src/relay.mjs";
 
 const agent = process.argv[2] ?? "claude";
+
+migrateLegacyDirs();
 
 try {
   if (process.env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME === "Jev Router") process.exit(0);

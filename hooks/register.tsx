@@ -47,17 +47,15 @@ const fetchLike =
 async function load($: EngineInterface) {
   const home = (await $.env.get('HOME')) ?? ''
   state.home = home
-  try {
-    state.config = resolveConfig(JSON.parse(await $.fs.read(`${home}/.config/jev-relay/config.json`)))
-  } catch {
-    state.config = resolveConfig()
-  }
+  const read = async (dir: string) => resolveConfig(JSON.parse(await $.fs.read(`${home}/.config/${dir}/config.json`)))
+  state.config = await read('jev-relayer').catch(() => read('jev-relay')).catch(() => resolveConfig())
   try {
     state.jevEnv = parseEnv(await $.fs.read(`${home}/.config/jev-opus/.env`))
   } catch {
     state.jevEnv = {}
   }
   const real: Vars = {
+    JEV_RELAYER: await $.env.get('JEV_RELAYER'),
     JEV_RELAY: await $.env.get('JEV_RELAY'),
     OPENROUTER_API_KEY: await $.env.get('OPENROUTER_API_KEY'),
     TYPESAFE_API_KEY: await $.env.get('TYPESAFE_API_KEY'),
@@ -78,7 +76,7 @@ async function remoteOf($: EngineInterface, cwd: string) {
 const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI|ENOENT|failed to start/i.test(String(err))
 
 const TYPED_ORIGINS = ['composer', 'bridge', 'sdk']
-const RESULT_PREFIX = 'jev-relay: the subagent finished.'
+const RESULT_PREFIX = 'jev-relayer: the subagent finished.'
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']
 const TIERS = ['haiku', 'sonnet', 'opus']
 const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
@@ -104,7 +102,7 @@ async function record($: EngineInterface, entry: Record<string, unknown>) {
   try {
     const session = (await $.session.id()).replace(/[^\w-]/g, '')
     if (!state.logs.has(session)) {
-      const path = `${state.home}/.local/state/jev-relay/mod/${session}.jsonl`
+      const path = `${state.home}/.local/state/jev-relayer/mod/${session}.jsonl`
       const existing = await $.fs.read(path).catch(() => '')
       state.logs.set(session, createBufferedLog(text => $.fs.write(path, text), typeof existing === 'string' ? existing : ''))
     }
@@ -172,7 +170,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, p
     if (!isUnavailable(err)) return false
   }
   try {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: 'Handoff from jev-relay', cwd })
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: 'Handoff from jev-relayer', cwd })
     if ('agentId' in started) state.spawned.add(started.agentId)
     return 'agentId' in started
   } catch {
@@ -183,14 +181,14 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, p
 async function act($: EngineInterface, prompt: string, decision: Decision, isFirstPrompt: boolean): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relay' }).catch(() => null)
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relayer' }).catch(() => null)
     if (started && 'agentId' in started) {
       state.spawned.add(started.agentId)
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
-      return `jev-relay: a subagent (${started.model}) is already working on the user's request. Reply with one short sentence saying so and stop; its result arrives when it finishes.`
+      return `jev-relayer: a subagent (${started.model}) is already working on the user's request. Reply with one short sentence saying so and stop; its result arrives when it finishes.`
     }
     void record($, { event: 'action', placement: 'subagent', outcome: 'delegated-to-model', model })
-    return `jev-relay: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
+    return `jev-relayer: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
   }
   if (decision.placement !== 'sibling') return null
   if (isFirstPrompt) {
@@ -202,7 +200,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
     void record($, { event: 'action', placement: 'sibling', outcome: 'quiet-after-decline', model })
     return null
   }
-  const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Keep here', 'Run in background'], header: 'jev-relay' })
+  const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Keep here', 'Run in background'], header: 'jev-relayer' })
   if (answer !== 'Run in background') {
     state.siblingQuietUntil = state.typedPrompts + SIBLING_QUIET_PROMPTS
     void record($, { event: 'action', placement: 'sibling', outcome: 'declined', model })
@@ -213,7 +211,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
     return null
   }
   void record($, { event: 'action', placement: 'sibling', outcome: 'accepted', model })
-  return `jev-relay: the user's request was handed to a background session (${model}). Reply with one short sentence saying so and stop; do not do the work here.`
+  return `jev-relayer: the user's request was handed to a background session (${model}). Reply with one short sentence saying so and stop; do not do the work here.`
 }
 
 export const register: Register = on => {

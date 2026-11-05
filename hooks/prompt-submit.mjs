@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { defaultDeps } from "../src/deps.mjs";
 import { createStateStore } from "../src/state.mjs";
@@ -8,6 +9,8 @@ import { sessionTitle } from "../src/transcripts.mjs";
 import { handlePrompt } from "../src/relay.mjs";
 
 const agent = process.argv[2] ?? "claude";
+
+migrateLegacyDirs();
 
 try {
   let raw = "";
@@ -22,7 +25,7 @@ try {
   });
   if (advice) {
     if (config.macNotifications && advice.notice) {
-      const title = sessionTitle(input.transcript_path) || "jev-relay";
+      const title = sessionTitle(input.transcript_path) || "jev-relayer";
       const [cmd, ...args] = notifyCommand(advice.notice, title);
       execFile(cmd, args, { timeout: 3000 }, () => {});
     }

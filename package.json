@@ -1,10 +1,10 @@
 {
-  "name": "jev-relay",
+  "name": "jev-relayer",
   "version": "0.1.0",
   "description": "Routes each Claude Code or Codex task to the right place (inline, subagent or sibling session) and the right model",
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=20.12" },
-  "bin": { "jev-relay": "bin/jev-relay.mjs" },
+  "bin": { "jev-relayer": "bin/jev-relayer.mjs" },
   "scripts": { "test": "node --test test/*.test.mjs" }
 }

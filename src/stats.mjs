@@ -215,7 +215,7 @@ export function runStats(args, dir = STATE_DIR, now = Date.now()) {
   const json = args.includes("--json");
   const daysIndex = args.indexOf("--days");
   const days = daysIndex >= 0 ? Number(args[daysIndex + 1]) : undefined;
-  if (daysIndex >= 0 && !(days > 0)) throw new Error("usage: jev-relay stats [--days N] [--json]");
+  if (daysIndex >= 0 && !(days > 0)) throw new Error("usage: jev-relayer stats [--days N] [--json]");
   const summary = summarize(readEvents(dir, { days, now }));
   return json ? JSON.stringify(summary, null, 2) : formatSummary(summary);
 }

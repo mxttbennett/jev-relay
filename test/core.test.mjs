@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runChain } from "../src/chain.mjs";
 import { DEFAULTS, isEnabled, loadConfig, merge, repoClass } from "../src/config.mjs";
 import { resolveConfig } from "../src/defaults.mjs";
+import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
 import { parseVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
@@ -101,6 +102,8 @@ test("config merges user overrides, replaces arrays, and classifies repos", () =
   assert.deepEqual(merged.chains.personal, DEFAULTS.chains.personal);
   assert.equal(isEnabled(merged, "codex", {}), false);
   assert.equal(isEnabled(merged, "claude", {}), true);
+  assert.equal(isEnabled(merged, "claude", { JEV_RELAYER: "off" }), false);
+  assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
   assert.equal(repoClass(DEFAULTS, "/x", () => "git@github-personal:mxttbennett/dots.git"), "personal");
   assert.equal(repoClass(DEFAULTS, "/x", () => "git@github.com:acme-corp/work-app.git"), "work");
@@ -222,7 +225,7 @@ test("notification helpers build an escape-free osascript call and detect change
   // Arrange
   const verdict = { placement: "inline", model: "haiku", effort: "low", confidence: 0.9 };
   // Act & Assert
-  assert.deepEqual(notifyCommand('say "hi"').slice(-2), ['say "hi"', "jev-relay"]);
+  assert.deepEqual(notifyCommand('say "hi"').slice(-2), ['say "hi"', "jev-relayer"]);
   assert.equal(decisionLabel(verdict), "inline · haiku · low · 0.90");
   assert.equal(isChange(null, verdict), true);
   assert.equal(isChange(verdict, { ...verdict, confidence: 0.5 }), false);
@@ -270,7 +273,7 @@ test("sendNotification titles the notification from the transcript for any calle
   await sendNotification({ message: "m", readTranscript: () => Promise.reject(new Error("x")), run });
   // Assert
   assert.equal(ran[0].at(-1), "Fix login");
-  assert.equal(ran[1].at(-1), "jev-relay");
+  assert.equal(ran[1].at(-1), "jev-relayer");
   assert.equal(transcriptPath({ configDir: "/c", cwd: "/a/b_c", id: "i" }), "/c/projects/-a-b-c/i.jsonl");
 });
 
@@ -304,4 +307,20 @@ test("breaker skips a provider after repeated failures until the cooldown ends",
   assert.equal(calls, 3);
   await runChain(["bad", "ok"], providers, {}, breaker);
   assert.equal(calls, 3);
+});
+
+test("legacy jev-relay config and state move to jev-relayer without overwriting newer files", () => {
+  const home = mkdtempSync(join(tmpdir(), "jev-"));
+  mkdirSync(join(home, ".config", "jev-relay"), { recursive: true });
+  mkdirSync(join(home, ".local", "state", "jev-relay", "mod"), { recursive: true });
+  mkdirSync(join(home, ".local", "state", "jev-relayer"), { recursive: true });
+  writeFileSync(join(home, ".config", "jev-relay", "config.json"), '{"report":"every-turn"}');
+  writeFileSync(join(home, ".local", "state", "jev-relay", "relay.log"), "old\n");
+  writeFileSync(join(home, ".local", "state", "jev-relay", "mod", "s.jsonl"), "old-mod\n");
+  writeFileSync(join(home, ".local", "state", "jev-relayer", "relay.log"), "new\n");
+  migrateLegacyDirs(home);
+  assert.equal(readFileSync(join(home, ".config", "jev-relayer", "config.json"), "utf8"), '{"report":"every-turn"}');
+  assert.equal(readFileSync(join(home, ".local", "state", "jev-relayer", "relay.log"), "utf8"), "new\n");
+  assert.equal(readFileSync(join(home, ".local", "state", "jev-relayer", "mod", "s.jsonl"), "utf8"), "old-mod\n");
+  assert.equal(existsSync(join(home, ".config", "jev-relay")), false);
 });

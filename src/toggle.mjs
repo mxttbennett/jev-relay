@@ -37,12 +37,12 @@ export function runCli(argv, path = CONFIG_PATH) {
     return [...lines, `band: ${band.enabled ? "on" : "off"}`].join("\n");
   }
   if (command === "band") {
-    if (target !== "on" && target !== "off") throw new Error("usage: jev-relay band on|off");
+    if (target !== "on" && target !== "off") throw new Error("usage: jev-relayer band on|off");
     writeUser(path, merge(readUser(path), { band: { enabled: target === "on" } }));
     return runCli(["status"], path);
   }
   if (command !== "on" && command !== "off") {
-    throw new Error("usage: jev-relay status|stats|on|off [claude|codex|all]|band on|off");
+    throw new Error("usage: jev-relayer status|stats|on|off [claude|codex|all]|band on|off");
   }
   writeUser(path, setEnabled(readUser(path), resolveAgents(target), command === "on"));
   return runCli(["status"], path);

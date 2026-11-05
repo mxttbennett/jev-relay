@@ -6,7 +6,7 @@ import { repoClass as classifyRepo, resolveConfig } from "./defaults.mjs";
 
 export { DEFAULTS, describeModels, isEnabled, merge } from "./defaults.mjs";
 
-export const CONFIG_PATH = join(homedir(), ".config", "jev-relay", "config.json");
+export const CONFIG_PATH = join(homedir(), ".config", "jev-relayer", "config.json");
 
 export function loadConfig(path = CONFIG_PATH) {
   let user = {};

@@ -1,4 +1,4 @@
-export const notifyCommand = (message, title = "jev-relay") => [
+export const notifyCommand = (message, title = "jev-relayer") => [
   "osascript",
   "-e", "on run argv",
   "-e", "display notification (item 1 of argv) with title (item 2 of argv)",
@@ -29,5 +29,5 @@ export const transcriptPath = ({ configDir, cwd, id }) =>
 export async function sendNotification({ message, readTranscript, run }) {
   const text = await Promise.resolve(readTranscript()).catch(() => "");
   const title = titleFromTranscript(String(text));
-  await Promise.resolve(run(notifyCommand(message, title || "jev-relay"))).catch(() => {});
+  await Promise.resolve(run(notifyCommand(message, title || "jev-relayer"))).catch(() => {});
 }

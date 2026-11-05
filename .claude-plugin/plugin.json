@@ -1,5 +1,5 @@
 {
-  "name": "jev-relay",
+  "name": "jev-relayer",
   "version": "0.1.0",
   "description": "Advises whether a prompt should run inline, in a subagent or in a sibling session, and picks the subagent model"
 }

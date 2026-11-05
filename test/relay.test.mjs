@@ -92,7 +92,7 @@ test("degraded notice appears once per session and re-arms after a success", asy
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
   assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
   providers.jev = answer({ placement: "inline", model: "sonnet" }, true);
-  assert.deepEqual(await run({ input, agent: "claude", config, deps }), { context: "", notice: "· jev-relay: inline · sonnet" });
+  assert.deepEqual(await run({ input, agent: "claude", config, deps }), { context: "", notice: "· jev-relayer: inline · sonnet" });
   providers.jev = down(true);
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
 });
@@ -120,13 +120,13 @@ test("subagent model pick skips explicit models and forks, and classifies on a c
 
 test("each nudge carries a short user-facing notice, and the degraded warning has its own", async () => {
   const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
-  assert.equal((await run({ input, agent: "claude", config, deps })).notice, "↪ jev-relay: subagent · haiku");
+  assert.equal((await run({ input, agent: "claude", config, deps })).notice, "↪ jev-relayer: subagent · haiku");
 
   const sibling = setup({ providers: { jev: answer({ placement: "sibling", model: null }, true), heuristics }, snapshot: priorTurn });
-  assert.equal((await run({ input, agent: "claude", config: sibling.config, deps: sibling.deps })).notice, "↪ jev-relay: sibling session");
+  assert.equal((await run({ input, agent: "claude", config: sibling.config, deps: sibling.deps })).notice, "↪ jev-relayer: sibling session");
 
   const down = setup({ providers: { jev: { remote: true, heuristic: false, run: async () => { throw new Error("x"); } }, heuristics } });
-  assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relay: no classifier answered, using heuristics");
+  assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relayer: no classifier answered, using heuristics");
 });
 
 test("a low-confidence turn drops the cached model so the next pick is fresh", async () => {
@@ -142,28 +142,28 @@ test("buildNotice has no line for an inline verdict", () => {
 
 test("notices show the verdict confidence when the classifier reports one", async () => {
   const sub = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
-  assert.equal((await run({ input, agent: "claude", config: sub.config, deps: sub.deps })).notice, "↪ jev-relay: subagent · haiku · 0.90");
+  assert.equal((await run({ input, agent: "claude", config: sub.config, deps: sub.deps })).notice, "↪ jev-relayer: subagent · haiku · 0.90");
 
   const inline = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet", confidence: 0.75 }, true), heuristics } });
   const out = await run({ input, agent: "claude", config: merge(inline.config, { report: "every-turn" }), deps: inline.deps });
-  assert.equal(out.notice, "· jev-relay: inline · sonnet · 0.75");
+  assert.equal(out.notice, "· jev-relayer: inline · sonnet · 0.75");
 });
 
 test("every-turn reporting says when a turn was skipped, cooling down, or judged inline", async () => {
   const every = (config) => merge(config, { report: "every-turn" });
   const small = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics }, snapshot: { contextTokens: 12000, lastAt: 1_000_000, turns: [] } });
   const skipped = await run({ input, agent: "claude", config: every(small.config), deps: small.deps });
-  assert.deepEqual(skipped, { context: "", notice: "· jev-relay: skipped · 12k tokens, cache warm" });
+  assert.deepEqual(skipped, { context: "", notice: "· jev-relayer: skipped · 12k tokens, cache warm" });
   assert.equal(await run({ input, agent: "claude", config: small.config, deps: small.deps }), null);
 
   const big = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics } });
   const inline = await run({ input, agent: "claude", config: every(big.config), deps: big.deps });
-  assert.deepEqual(inline, { context: "", notice: "· jev-relay: inline · sonnet" });
+  assert.deepEqual(inline, { context: "", notice: "· jev-relayer: inline · sonnet" });
 
   const cooling = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
   await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
   const next = await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
-  assert.equal(next.notice, "· jev-relay: skipped · cooling down (1/3)");
+  assert.equal(next.notice, "· jev-relayer: skipped · cooling down (1/3)");
 });
 
 test("default reporting shows an inline line only when the inline model changes", async () => {
@@ -173,7 +173,7 @@ test("default reporting shows an inline line only when the inline model changes"
   // Act
   const repeat = await run({ input, agent: "claude", config, deps });
   // Assert
-  assert.equal(first.notice, "· jev-relay: inline · haiku · 0.90");
+  assert.equal(first.notice, "· jev-relayer: inline · haiku · 0.90");
   assert.equal(repeat, null);
 });
 
