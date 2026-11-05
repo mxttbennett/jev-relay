@@ -5,6 +5,7 @@ import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { decisionLabel, isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, classifyFields } from '../src/relay.mjs'
+import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
@@ -13,6 +14,8 @@ type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
 const TURN_CHARS = 1500
+
+const breaker = memoryBreaker()
 
 const state = {
   config: resolveConfig(),
@@ -136,7 +139,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string): Prom
     idleMs: 0,
     cwd,
   }
-  const classified = await classify(signals, state.config, { providers, remoteOf: () => remote })
+  const classified = await classify(signals, state.config, { providers, remoteOf: () => remote, breaker })
   const { result } = classified
   void record($, {
     event: 'decision',

@@ -275,3 +275,24 @@ test("sendNotification finds an ai-title that sits before the last megabyte", as
   // Assert
   assert.equal(ran[0].at(-1), "Early title");
 });
+
+test("breaker skips a provider after repeated failures until the cooldown ends", async () => {
+  const { memoryBreaker } = await import("../src/breaker.mjs");
+  const { runChain } = await import("../src/chain.mjs");
+  let t = 0;
+  let calls = 0;
+  const breaker = memoryBreaker({ now: () => t, threshold: 2, cooldownMs: 1000 });
+  const providers = {
+    bad: { heuristic: false, run: async () => { calls++; throw new Error("down"); } },
+    ok: { heuristic: false, run: async () => ({ placement: "inline" }) },
+  };
+  for (let i = 0; i < 4; i++) await runChain(["bad", "ok"], providers, {}, breaker);
+  assert.equal(calls, 2);
+  const skipped = await runChain(["bad", "ok"], providers, {}, breaker);
+  assert.equal(skipped.failures[0].error, "circuit open");
+  t = 1001;
+  await runChain(["bad", "ok"], providers, {}, breaker);
+  assert.equal(calls, 3);
+  await runChain(["bad", "ok"], providers, {}, breaker);
+  assert.equal(calls, 3);
+});
