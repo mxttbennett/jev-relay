@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { loadConfig } from "../src/config.mjs";
 import { defaultDeps } from "../src/deps.mjs";
+import { createStateStore } from "../src/state.mjs";
 import { modelNotice } from "../src/nudge.mjs";
 import { pickSubagentModel } from "../src/relay.mjs";
 
@@ -24,5 +25,7 @@ try {
       }),
     );
   }
-} catch {}
+} catch (err) {
+  createStateStore().log({ event: "crash", hook: "agent-model", agent, error: String(err?.message ?? err) });
+}
 process.exit(0);

@@ -1,6 +1,6 @@
 const FALLBACK = { placement: "inline", model: null, effort: null, confidence: null };
 
-export async function runChain(names, providers, input) {
+export async function runChain(names, providers, input, breaker) {
   const failures = [];
   const started = performance.now();
   const elapsed = (since) => Math.round(performance.now() - since);
@@ -10,9 +10,14 @@ export async function runChain(names, providers, input) {
       failures.push({ name, error: "unknown provider", ms: 0 });
       continue;
     }
+    if (breaker?.isOpen(name)) {
+      failures.push({ name, error: "circuit open", ms: 0 });
+      continue;
+    }
     const attempt = performance.now();
     try {
       const verdict = await provider.run(input);
+      breaker?.succeed(name);
       const degraded = provider.heuristic && failures.length > 0;
       return {
         verdict,
@@ -24,6 +29,7 @@ export async function runChain(names, providers, input) {
         latencyMs: elapsed(started),
       };
     } catch (err) {
+      breaker?.fail(name);
       failures.push({ name, error: err.message, ms: elapsed(attempt) });
     }
   }
