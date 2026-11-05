@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { loadConfig } from "../src/config.mjs";
 import { defaultDeps } from "../src/deps.mjs";
+import { createStateStore } from "../src/state.mjs";
 import { execFile } from "node:child_process";
 import { notifyCommand } from "../src/notify.mjs";
 import { sessionTitle } from "../src/transcripts.mjs";
@@ -34,5 +35,7 @@ try {
     }
     console.log(JSON.stringify(output));
   }
-} catch {}
+} catch (err) {
+  createStateStore().log({ event: "crash", hook: "prompt-submit", agent, error: String(err?.message ?? err) });
+}
 process.exit(0);

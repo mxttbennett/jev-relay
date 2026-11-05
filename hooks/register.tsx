@@ -5,6 +5,7 @@ import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { decisionLabel, isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, classifyFields } from '../src/relay.mjs'
+import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
@@ -14,6 +15,8 @@ type Vars = Record<string, string | undefined>
 const DEADLINE_MS = 4000
 const TURN_CHARS = 1500
 const SIBLING_QUIET_PROMPTS = 10
+
+const breaker = memoryBreaker()
 
 const state = {
   config: resolveConfig(),
@@ -139,7 +142,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
     cwd,
     isFirstPrompt,
   }
-  const classified = await classify(signals, state.config, { providers, remoteOf: () => remote })
+  const classified = await classify(signals, state.config, { providers, remoteOf: () => remote, breaker })
   const { result } = classified
   void record($, {
     event: 'decision',
@@ -175,7 +178,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string) {
   }
 }
 
-async function act($: EngineInterface, prompt: string, decision: Decision): Promise<string | null> {
+async function act($: EngineInterface, prompt: string, decision: Decision, isFirstPrompt: boolean): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
     const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relay' }).catch(() => null)
@@ -188,6 +191,10 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
     return `jev-relay: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
   }
   if (decision.placement !== 'sibling') return null
+  if (isFirstPrompt) {
+    void record($, { event: 'action', placement: 'sibling', outcome: 'skipped-first-prompt', model })
+    return null
+  }
 
   if (state.typedPrompts <= state.siblingQuietUntil) {
     void record($, { event: 'action', placement: 'sibling', outcome: 'quiet-after-decline', model })
@@ -244,7 +251,7 @@ export const register: Register = on => {
       state.missed.add(pending)
       void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
     }
-    const directive = decision ? await act($, e.text, decision).catch(() => null) : null
+    const directive = decision ? await act($, e.text, decision, isFirstPrompt).catch(() => null) : null
     return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
 
