@@ -191,3 +191,15 @@ test("a sibling verdict below siblingMinConfidence is treated as inline, one abo
   const strong = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet", confidence: 0.9 }, true), heuristics }, snapshot: priorTurn });
   assert.match(await handlePrompt({ input, agent: "claude", config: strong.config, deps: strong.deps }), /claude --bg/);
 });
+
+test("a low-confidence log entry keeps a redacted, truncated prompt, and a confident one does not", async () => {
+  const low = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.3 }, true), heuristics }, remote: "git@github.com:work/x.git" });
+  low.config = { ...low.config, redact: { names: ["Acme"] }, chains: { ...low.config.chains, work: ["jev", "heuristics"] } };
+  const long = `ask Acme about ${"x".repeat(400)}`;
+  await run({ input: { ...input, prompt: long }, agent: "claude", config: low.config, deps: low.deps });
+  assert.ok(low.logs[0].prompt.length <= 200);
+  assert.ok(!low.logs[0].prompt.includes("Acme"));
+  const high = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
+  await run({ input, agent: "claude", config: high.config, deps: high.deps });
+  assert.equal("prompt" in high.logs[0], false);
+});
