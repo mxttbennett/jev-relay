@@ -120,6 +120,25 @@ working. Load this repository through `CLAUDE_CODE_PLUGIN_DIRS`.
 - A sibling verdict asks you to approve. Approving runs `claude --bg` (or a background subagent
   where the CLI is unavailable) with your prompt as the brief.
 
+## Tool profiles
+
+A profile limits the tools a sibling session starts with, so it loads fewer tool schemas and MCP
+server instructions. In a test with `claude -p` on haiku, `--strict-mcp-config` plus
+`--tools Read,Grep,Glob,Bash` cut the starting input from 37.5k to 16.2k tokens.
+
+Define profiles in `~/.config/jev-relay/config.json`. See `config.example.json`.
+
+```json
+"profiles": {
+  "lean": { "description": "Read-only search and summaries.", "claude": { "tools": ["Read", "Grep", "Glob", "Bash"] } },
+  "work": { "description": "Needs Linear or Harvest.", "claude": { "mcpConfig": "~/.config/jev-relay/mcp-work.json", "tools": ["Read", "Bash", "Edit"] } }
+}
+```
+
+The classifier reads each `description` and picks one. For a Claude sibling, jev-relay adds
+`--strict-mcp-config`, `--mcp-config <file>` when `mcpConfig` is set, and `--tools <list>`. With no
+`profiles` key, nothing changes. Profiles apply to Claude siblings only. Subagents are not covered yet.
+
 ## Band
 
 The band above the prompt shows the latest verdict, for example `jev: inline · haiku · 0.83`, with

@@ -37,6 +37,7 @@ export function defaultDeps(agent, config) {
   const env = process.env;
   return {
     env,
+    home: homedir(),
     now: Date.now,
     remoteOf: gitRemote,
     state: createStateStore(),

@@ -10,6 +10,7 @@ import {
   inlineNotice,
   skipNotice,
 } from "./nudge.mjs";
+import { claudeProfileFlags, profileDescriptions } from "./profiles.mjs";
 import { redact } from "./redact.mjs";
 
 const TURN_CHARS = 1500;
@@ -38,10 +39,11 @@ export async function classify(signals, config, deps) {
   const { text, hits } = redact(signals.text, config.redact.names);
   const models = config.models[signals.agent] ?? {};
   const { efforts } = config;
+  const profiles = signals.agent === "claude" ? profileDescriptions(config.profiles) : {};
   const names = config.chains[cls].filter(
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
-  const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) }, deps.breaker);
+  const result = await runChain(names, deps.providers, { ...signals, models, efforts, profiles, text: text.slice(-TEXT_CHARS) }, deps.breaker);
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
   const raw = result.verdict;
   const weakSibling =
@@ -126,7 +128,8 @@ export async function handlePrompt({ input, agent, config, deps }) {
   else if (!result.heuristic && result.verdict.model) {
     state.model = { value: result.verdict.model, at: deps.now() };
   }
-  const nudge = buildNudge(result.verdict, { agent, contextTokens });
+  const flags = agent === "claude" ? claudeProfileFlags(config.profiles[result.verdict.profile], deps.home) : [];
+  const nudge = buildNudge(result.verdict, { agent, contextTokens, flags });
   if (nudge) {
     lines.push(nudge);
     notices.push(buildNotice(result.verdict));

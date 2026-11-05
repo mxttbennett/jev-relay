@@ -43,6 +43,7 @@ export const DEFAULTS = {
     high: "Hard debugging, design and multi-step reasoning",
     xhigh: "The hardest work where extra reasoning pays off",
   },
+  profiles: {},
   redact: { names: [] },
   chains: {
     work: ["qwen-pc", "qwen", "heuristics"],
@@ -82,6 +83,7 @@ export function resolveConfig(user = {}) {
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
   if (user.efforts) config.efforts = user.efforts;
+  if (user.profiles) config.profiles = user.profiles;
   return config;
 }
 

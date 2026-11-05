@@ -23,14 +23,14 @@ export const inlineNotice = (verdict) => `· jev-relay: inline${detail(verdict)}
 
 export const modelNotice = (model) => `↪ jev-relay: subagent model → ${model}`;
 
-export function buildNudge(verdict, { agent, contextTokens }) {
+export function buildNudge(verdict, { agent, contextTokens, flags = [] }) {
   const size = `${Math.round(contextTokens / 1000)}k tokens`;
   const model = verdict.model ? ` with model ${verdict.model}` : "";
   if (verdict.placement === "subagent") {
     return `jev-relay: this prompt looks self-contained and read-heavy, and the conversation is large (${size}). Prefer a subagent${model} (Explore for searches) over continuing inline.`;
   }
   if (verdict.placement === "sibling") {
-    const command = AGENT_META[agent].siblingCommand(verdict.model);
+    const command = AGENT_META[agent].siblingCommand(verdict.model, flags);
     return `jev-relay: this prompt looks independent of the conversation, which is large (${size}). Write a short handoff brief without pasting this conversation, show it to the user, and once they approve run: ${command}`;
   }
   return null;
