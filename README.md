@@ -185,7 +185,7 @@ Read the report as a checklist:
 
 - **Heuristic fallback and failures**: a high rate means a classifier is down or too slow.
 - **Latency p95 and deadline misses**: verdicts that arrive late never apply.
-- **Confidence buckets and low-confidence rate**: too many verdicts under `minConfidence` means the threshold or the classifier needs work.
+- **Confidence buckets and low-confidence rate**: too many verdicts under `minConfidence` means the threshold or the classifier needs work. Each low-confidence log entry carries the first 200 characters of the prompt, with `redact.names` applied, so you can read what the classifier struggled with.
 - **Manual overrides and sibling acceptance**: you rejecting the router is the clearest wrong signal.
 - **Served ≠ picked**: the router asked for one model and another answered.
 - **Gate skip rate**: how often the gate hides turns the router could have helped.

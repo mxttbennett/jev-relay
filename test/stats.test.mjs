@@ -42,6 +42,7 @@ test("a classified prompt logs latency, nudge and the raw verdict behind a low-c
   assert.equal(entry.event, "prompt");
   assert.equal(entry.lowConfidence, true);
   assert.equal(entry.rawVerdict.placement, "subagent");
+  assert.equal(entry.prompt, input.prompt);
   assert.equal(entry.verdict.placement, "inline");
   assert.equal(entry.nudged, false);
   assert.equal(entry.promptChars, input.prompt.length);

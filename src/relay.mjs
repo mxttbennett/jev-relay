@@ -14,16 +14,17 @@ import { redact } from "./redact.mjs";
 
 const TURN_CHARS = 1500;
 const TEXT_CHARS = 6000;
+const PROMPT_LOG_CHARS = 200;
 const MODEL_TTL_MS = 10 * 60 * 1000;
 
-export function classifyFields({ result, cls, hits, low, raw, downgraded }) {
+export function classifyFields({ result, cls, hits, low, raw, downgraded, prompt }) {
   return {
     repoClass: cls,
     redactionHits: hits,
     provider: result.provider,
     heuristic: result.heuristic,
     verdict: result.verdict,
-    ...(low && { lowConfidence: true }),
+    ...(low && { lowConfidence: true, prompt }),
     ...(downgraded && { downgraded, rawVerdict: raw }),
     degraded: result.degraded,
     latencyMs: result.latencyMs,
@@ -53,7 +54,8 @@ export async function classify(signals, config, deps) {
         ? "weak-sibling"
         : null;
   if (downgraded) result.verdict = { placement: "inline", model: null, effort: null, confidence: raw.confidence };
-  return { result, cls, hits, low, raw, downgraded };
+  const prompt = low ? redact(signals.prompt, config.redact.names).text.slice(0, PROMPT_LOG_CHARS) : undefined;
+  return { result, cls, hits, low, raw, downgraded, prompt };
 }
 
 function coolingDown(nudge, contextTokens, cooldown) {
