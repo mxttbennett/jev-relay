@@ -43,7 +43,15 @@ export async function classify(signals, config, deps) {
   const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) }, deps.breaker);
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
   const raw = result.verdict;
-  const downgraded = low ? "low-confidence" : signals.isFirstPrompt && raw.placement === "sibling" ? "first-prompt" : null;
+  const weakSibling =
+    !result.heuristic && raw.placement === "sibling" && raw.confidence != null && raw.confidence < config.siblingMinConfidence;
+  const downgraded = low
+    ? "low-confidence"
+    : signals.isFirstPrompt && raw.placement === "sibling"
+      ? "first-prompt"
+      : weakSibling
+        ? "weak-sibling"
+        : null;
   if (downgraded) result.verdict = { placement: "inline", model: null, effort: null, confidence: raw.confidence };
   return { result, cls, hits, low, raw, downgraded };
 }

@@ -183,3 +183,11 @@ test("a sibling verdict on the first prompt of a session is not offered", async 
   assert.equal(logs[0].downgraded, "first-prompt");
   assert.equal(logs[0].rawVerdict.placement, "sibling");
 });
+
+test("a sibling verdict below siblingMinConfidence is treated as inline, one above it is offered", async () => {
+  const weak = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet", confidence: 0.7 }, true), heuristics }, snapshot: priorTurn });
+  assert.equal(await handlePrompt({ input, agent: "claude", config: weak.config, deps: weak.deps }), null);
+  assert.equal(weak.logs[0].downgraded, "weak-sibling");
+  const strong = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet", confidence: 0.9 }, true), heuristics }, snapshot: priorTurn });
+  assert.match(await handlePrompt({ input, agent: "claude", config: strong.config, deps: strong.deps }), /claude --bg/);
+});

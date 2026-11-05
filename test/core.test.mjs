@@ -86,6 +86,15 @@ test("an out-of-range minConfidence falls back to the default", () => {
   assert.equal(loadConfig(file).minConfidence, 0.8);
 });
 
+test("an out-of-range siblingMinConfidence falls back to the default", () => {
+  const dir = mkdtempSync(join(tmpdir(), "relay-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ siblingMinConfidence: 2 }));
+  assert.equal(loadConfig(file).siblingMinConfidence, 0.85);
+  writeFileSync(file, JSON.stringify({ siblingMinConfidence: 0.7 }));
+  assert.equal(loadConfig(file).siblingMinConfidence, 0.7);
+});
+
 test("config merges user overrides, replaces arrays, and classifies repos", () => {
   const merged = merge(DEFAULTS, { chains: { work: ["heuristics"] }, agents: { codex: { enabled: false } } });
   assert.deepEqual(merged.chains.work, ["heuristics"]);

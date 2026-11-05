@@ -30,6 +30,7 @@ export const DEFAULTS = {
   },
   cooldown: { prompts: 3, growth: 0.25 },
   minConfidence: 0.6,
+  siblingMinConfidence: 0.85,
   band: { enabled: false },
   statusNotice: true,
   macNotifications: false,
@@ -77,6 +78,7 @@ export function merge(base, override) {
 export function resolveConfig(user = {}) {
   const config = merge(DEFAULTS, user);
   if (!(config.minConfidence >= 0 && config.minConfidence <= 1)) config.minConfidence = DEFAULTS.minConfidence;
+  if (!(config.siblingMinConfidence >= 0 && config.siblingMinConfidence <= 1)) config.siblingMinConfidence = DEFAULTS.siblingMinConfidence;
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
   if (user.efforts) config.efforts = user.efforts;
