@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { DEFAULTS } from "../src/config.mjs";
 import { runChain } from "../src/chain.mjs";
 import { handlePrompt, pickSubagentModel } from "../src/relay.mjs";
-import { percentile, readEvents, runStats, summarize } from "../src/stats.mjs";
+import { formatSummary, percentile, readEvents, runStats, summarize } from "../src/stats.mjs";
 import { createBufferedLog } from "../src/buffered-log.mjs";
 
 const heuristics = { remote: false, heuristic: true, run: async () => ({ placement: "inline", model: null, confidence: 0.5 }) };
@@ -159,3 +160,28 @@ test("a heuristic provider under a custom name is counted as heuristic", () => {
   assert.equal(s.health.heuristicRate, 0.5);
   assert.equal(s.verdicts.meanConfidence, 0.9);
 });
+
+test("summarize counts hook crashes by hook and message", () => {
+  const at = "2026-11-04T00:00:00Z";
+  const s = summarize([
+    { at, event: "crash", hook: "prompt-submit", error: "boom" },
+    { at, event: "crash", hook: "prompt-submit", error: "boom" },
+    { at, event: "crash", hook: "agent-model", error: "bad" },
+  ]);
+  assert.deepEqual(s.health.hookCrashes, { "prompt-submit: boom": 2, "agent-model: bad": 1 });
+  assert.match(formatSummary(s), /hook crashes 3/);
+});
+
+for (const hook of ["prompt-submit", "agent-model"]) {
+  test(`${hook} hook logs a crash and still exits cleanly`, () => {
+    const home = mkdtempSync(join(tmpdir(), "jev-crash-"));
+    const run = spawnSync(process.execPath, [join(import.meta.dirname, "..", "hooks", `${hook}.mjs`)], {
+      input: "not json",
+      env: { ...process.env, HOME: home },
+    });
+    assert.equal(run.status, 0);
+    const [entry] = readFileSync(join(home, ".local", "state", "jev-relay", "relay.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.equal(entry.event, "crash");
+    assert.equal(entry.hook, hook);
+  });
+}

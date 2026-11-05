@@ -40,7 +40,7 @@ export async function classify(signals, config, deps) {
   const names = config.chains[cls].filter(
     (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
   );
-  const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) });
+  const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) }, deps.breaker);
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
   const raw = result.verdict;
   const downgraded = low ? "low-confidence" : signals.isFirstPrompt && raw.placement === "sibling" ? "first-prompt" : null;
@@ -98,6 +98,10 @@ export async function handlePrompt({ input, agent, config, deps }) {
     deps,
   );
   const { result, low } = classified;
+  const isFirstPrompt = !snapshot.turns.some((t) => t.role === "user" && t.text !== input.prompt);
+  if (isFirstPrompt && result.verdict.placement === "sibling") {
+    result.verdict = { placement: "inline", model: null, effort: null, confidence: result.verdict.confidence };
+  }
 
   const lines = [];
   const notices = [];
