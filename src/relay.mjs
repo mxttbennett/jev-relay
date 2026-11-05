@@ -95,6 +95,10 @@ export async function handlePrompt({ input, agent, config, deps }) {
     deps,
   );
   const { result, low } = classified;
+  const isFirstPrompt = !snapshot.turns.some((t) => t.role === "user" && t.text !== input.prompt);
+  if (isFirstPrompt && result.verdict.placement === "sibling") {
+    result.verdict = { placement: "inline", model: null, effort: null, confidence: result.verdict.confidence };
+  }
 
   const lines = [];
   const notices = [];

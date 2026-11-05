@@ -69,7 +69,7 @@ test("classify passes each agent its own models, and none when an agent lists no
 function relayDeps(provider) {
   return {
     env: {}, now: () => 1_000_000, remoteOf: () => "git@github-personal:mxttbennett/x.git",
-    readTranscript: () => ({ contextTokens: 150000, lastAt: 1_000_000, turns: [] }),
+    readTranscript: () => ({ contextTokens: 150000, lastAt: 1_000_000, turns: [{ role: "user", text: "earlier prompt" }] }),
     providers: { jev: provider },
     state: { load: () => ({}), save() {}, log() {} },
   };
