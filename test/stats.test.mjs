@@ -181,7 +181,7 @@ for (const hook of ["prompt-submit", "agent-model"]) {
       env: { ...process.env, HOME: home },
     });
     assert.equal(run.status, 0);
-    const [entry] = readFileSync(join(home, ".local", "state", "jev-relay", "relay.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const [entry] = readFileSync(join(home, ".local", "state", "jev-relayer", "relay.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(entry.event, "crash");
     assert.equal(entry.hook, hook);
   });

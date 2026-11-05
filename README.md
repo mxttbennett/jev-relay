@@ -1,4 +1,4 @@
-# jev-relay
+# jev-relayer
 
 Per-task Jev routing for Claude Code and Codex. On each prompt it decides whether the work should
 run inline, in a subagent or in a sibling session, and it picks the subagent model.
@@ -41,7 +41,7 @@ If every classifier fails, the hook says so once per session and falls back to h
 
 ## Config
 
-Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relay/config.json`:
+Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relayer/config.json`:
 
 ```json
 { "chains": { "work": ["qwen", "heuristics"] }, "redact": { "names": ["Acme"] } }
@@ -74,21 +74,21 @@ Each nudge and each subagent model pick also prints one line to you through the 
 `systemMessage` field. The model sees the full advice, and you see this:
 
 ```
-↪ jev-relay: subagent · sonnet · 0.90
-↪ jev-relay: sibling session · sonnet · 0.85
-↪ jev-relay: subagent model → haiku
-⚠ jev-relay: no classifier answered, using heuristics
+↪ jev-relayer: subagent · sonnet · 0.90
+↪ jev-relayer: sibling session · sonnet · 0.85
+↪ jev-relayer: subagent model → haiku
+⚠ jev-relayer: no classifier answered, using heuristics
 ```
 
 The number is the classifier's confidence, shown when it reports one.
 
-By default you only see a line when `jev-relay` acts, including when an inline verdict switches the model. Set `"report": "every-turn"` in the config to
+By default you only see a line when `jev-relayer` acts, including when an inline verdict switches the model. Set `"report": "every-turn"` in the config to
 see one on every prompt, including the ones it skipped:
 
 ```
-· jev-relay: skipped · 12k tokens, cache warm
-· jev-relay: skipped · cooling down (1/3)
-· jev-relay: inline · sonnet · 0.80
+· jev-relayer: skipped · 12k tokens, cache warm
+· jev-relayer: skipped · cooling down (1/3)
+· jev-relayer: inline · sonnet · 0.80
 ```
 
 A remote verdict with confidence below `minConfidence` (default `0.6`) is treated as inline: no
@@ -98,7 +98,7 @@ default.
 A sibling verdict (background session) needs more: confidence of at least `siblingMinConfidence` (default
 `0.85`), or it is treated as inline. The first prompt of a session never gets a sibling verdict.
 
-Set `"macNotifications": true` to also get a native macOS notification whenever `jev-relay` acts or the
+Set `"macNotifications": true` to also get a native macOS notification whenever `jev-relayer` acts or the
 decision changes (the same moments as the default `changes` reporting). It is off by default.
 
 ## Effort
@@ -126,16 +126,16 @@ A profile limits the tools a sibling session starts with, so it loads fewer tool
 server instructions. In a test with `claude -p` on haiku, `--strict-mcp-config` plus
 `--tools Read,Grep,Glob,Bash` cut the starting input from 37.5k to 16.2k tokens.
 
-Define profiles in `~/.config/jev-relay/config.json`. See `config.example.json`.
+Define profiles in `~/.config/jev-relayer/config.json`. See `config.example.json`.
 
 ```json
 "profiles": {
   "lean": { "description": "Read-only search and summaries.", "claude": { "tools": ["Read", "Grep", "Glob", "Bash"] } },
-  "work": { "description": "Needs Linear or Harvest.", "claude": { "mcpConfig": "~/.config/jev-relay/mcp-work.json", "tools": ["Read", "Bash", "Edit"] } }
+  "work": { "description": "Needs Linear or Harvest.", "claude": { "mcpConfig": "~/.config/jev-relayer/mcp-work.json", "tools": ["Read", "Bash", "Edit"] } }
 }
 ```
 
-The classifier reads each `description` and picks one. For a Claude sibling, jev-relay adds
+The classifier reads each `description` and picks one. For a Claude sibling, jev-relayer adds
 `--strict-mcp-config`, `--mcp-config <file>` when `mcpConfig` is set, and `--tools <list>`. With no
 `profiles` key, nothing changes. Profiles apply to Claude siblings only. Subagents are not covered yet.
 
@@ -145,25 +145,25 @@ The band above the prompt shows the latest verdict, for example `jev: inline · 
 a Switch button when the pick differs from the session model. It is off by default:
 
 ```bash
-jev-relay band on
-jev-relay band off
+jev-relayer band on
+jev-relayer band off
 ```
 
 ## Status notice
 
 The mod prints `jev → haiku · 0.98` in the status area when it picks a model. Turn it off with
-`"statusNotice": false` in `~/.config/jev-relay/config.json`. The status line's model slot still
+`"statusNotice": false` in `~/.config/jev-relayer/config.json`. The status line's model slot still
 shows the routed model.
 
 ## Toggle
 
 ```bash
-jev-relay status
-jev-relay off codex
-jev-relay on all
+jev-relayer status
+jev-relayer off codex
+jev-relayer on all
 ```
 
-`JEV_RELAY=off` disables everything for one process.
+`JEV_RELAYER=off` disables everything for one process. The old name `jev-relay` still works for `JEV_RELAY=off`. The first run moves `~/.config/jev-relay` and `~/.local/state/jev-relay` to the `jev-relayer` names without overwriting newer files.
 
 ## Install
 
@@ -181,8 +181,8 @@ npm test
 ## Metrics
 
 Both paths write JSONL events with no prompt text, only lengths. The hooks append to
-`~/.local/state/jev-relay/relay.log`. The mod writes one file per session under
-`~/.local/state/jev-relay/mod/`.
+`~/.local/state/jev-relayer/relay.log`. The mod writes one file per session under
+`~/.local/state/jev-relayer/mod/`.
 
 | Event | Source | Records |
 | --- | --- | --- |
@@ -195,9 +195,9 @@ Both paths write JSONL events with no prompt text, only lengths. The hooks appen
 | `deadline-miss` | mod | the classifier answered too late to affect the turn |
 
 ```bash
-jev-relay stats              # everything
-jev-relay stats --days 7     # last week
-jev-relay stats --json       # machine-readable
+jev-relayer stats              # everything
+jev-relayer stats --days 7     # last week
+jev-relayer stats --json       # machine-readable
 ```
 
 Read the report as a checklist:

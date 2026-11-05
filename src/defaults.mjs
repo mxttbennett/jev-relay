@@ -88,7 +88,7 @@ export function resolveConfig(user = {}) {
 }
 
 export function isEnabled(config, agent, env = {}) {
-  if (env.JEV_RELAY === "off") return false;
+  if (env.JEV_RELAYER === "off" || env.JEV_RELAY === "off") return false;
   return config.agents[agent]?.enabled !== false;
 }
 

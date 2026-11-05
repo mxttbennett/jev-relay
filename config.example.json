@@ -7,7 +7,7 @@
     "work": {
       "description": "Needs Linear tickets or Harvest time logging.",
       "claude": {
-        "mcpConfig": "~/.config/jev-relay/mcp-work.json",
+        "mcpConfig": "~/.config/jev-relayer/mcp-work.json",
         "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
       }
     }
