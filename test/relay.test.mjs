@@ -27,6 +27,7 @@ function setup({ providers, config = DEFAULTS, snapshot, remote = "git@github-pe
 const answer = (verdict, remote = false) => ({ remote, heuristic: false, run: async () => verdict });
 const down = (remote = false) => ({ remote, heuristic: false, run: async () => { throw new Error("down"); } });
 const heuristics = { remote: false, heuristic: true, run: async () => ({ placement: "inline", model: null, confidence: 0.5 }) };
+const priorTurn = { contextTokens: 150000, lastAt: 1_000_000, turns: [{ role: "user", text: "earlier prompt" }] };
 const input = { session_id: "s", prompt: "audit the repo", cwd: "/x", transcript_path: "/t" };
 
 test("silent below the gate", async () => {
@@ -54,7 +55,7 @@ test("heuristic verdicts ignore minConfidence", async () => {
 });
 
 test("sibling nudge names the native background command", async () => {
-  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics } });
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics }, snapshot: priorTurn });
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /claude --bg/);
 });
 
@@ -104,7 +105,7 @@ test("disabled agent does nothing", async () => {
 });
 
 test("codex gets nudges with its sibling command and never a subagent model pick", async () => {
-  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics } });
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics }, snapshot: priorTurn });
   assert.match(await handlePrompt({ input, agent: "codex", config, deps }), /codex exec/);
   assert.equal(await pickSubagentModel({ input: { tool_input: { prompt: "p" } }, agent: "codex", config, deps }), null);
 });
@@ -121,7 +122,7 @@ test("each nudge carries a short user-facing notice, and the degraded warning ha
   const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
   assert.equal((await run({ input, agent: "claude", config, deps })).notice, "↪ jev-relay: subagent · haiku");
 
-  const sibling = setup({ providers: { jev: answer({ placement: "sibling", model: null }, true), heuristics } });
+  const sibling = setup({ providers: { jev: answer({ placement: "sibling", model: null }, true), heuristics }, snapshot: priorTurn });
   assert.equal((await run({ input, agent: "claude", config: sibling.config, deps: sibling.deps })).notice, "↪ jev-relay: sibling session");
 
   const down = setup({ providers: { jev: { remote: true, heuristic: false, run: async () => { throw new Error("x"); } }, heuristics } });
@@ -174,4 +175,9 @@ test("default reporting shows an inline line only when the inline model changes"
   // Assert
   assert.equal(first.notice, "· jev-relay: inline · haiku · 0.90");
   assert.equal(repeat, null);
+});
+
+test("a sibling verdict on the first prompt of a session is not offered", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet", confidence: 0.9 }, true), heuristics } });
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
 });
