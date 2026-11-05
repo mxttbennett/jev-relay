@@ -2,6 +2,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { isEnabled, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
+import { claudeProfileFlags } from '../src/profiles.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { decisionLabel, isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, classifyFields } from '../src/relay.mjs'
@@ -9,7 +10,7 @@ import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
-type Decision = { placement: string; model: string | null; effort: Effort | null; confidence: number | null }
+type Decision = { placement: string; model: string | null; effort: Effort | null; profile?: string; confidence: number | null }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -161,10 +162,11 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return result.verdict
 }
 
-async function spawnSibling($: EngineInterface, prompt: string, model: string) {
+async function spawnSibling($: EngineInterface, prompt: string, model: string, profile?: string) {
   const cwd = await $.session.cwd()
+  const flags = claudeProfileFlags(profile ? state.config.profiles[profile] : undefined, state.home)
   try {
-    const ran = await $.process.run(['claude', '--bg', '--model', model, prompt], { cwd, timeoutMs: 30_000 })
+    const ran = await $.process.run(['claude', '--bg', '--model', model, ...flags, ...(flags.length ? ['--'] : []), prompt], { cwd, timeoutMs: 30_000 })
     return ran.exitCode === 0
   } catch (err) {
     if (!isUnavailable(err)) return false
@@ -206,7 +208,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
     void record($, { event: 'action', placement: 'sibling', outcome: 'declined', model })
     return null
   }
-  if (!(await spawnSibling($, prompt, model))) {
+  if (!(await spawnSibling($, prompt, model, decision.profile))) {
     void record($, { event: 'action', placement: 'sibling', outcome: 'spawn-failed', model })
     return null
   }

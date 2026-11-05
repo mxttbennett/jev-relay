@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "lean": {
+      "description": "Read-only search, summaries and quick edits. Needs no external services.",
+      "claude": { "tools": ["Read", "Grep", "Glob", "Bash"] }
+    },
+    "work": {
+      "description": "Needs Linear tickets or Harvest time logging.",
+      "claude": {
+        "mcpConfig": "~/.config/jev-relay/mcp-work.json",
+        "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
+      }
+    }
+  }
+}

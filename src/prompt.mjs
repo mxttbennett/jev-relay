@@ -14,8 +14,9 @@ const list = (criteria) =>
 
 const hasModels = (models) => Object.keys(models).length > 0;
 const hasEfforts = (efforts) => Object.keys(efforts).length > 0;
+const hasProfiles = (profiles) => Object.keys(profiles).length > 0;
 
-export function jevQuestions(models = {}, efforts = {}) {
+export function jevQuestions(models = {}, efforts = {}, profiles = {}) {
   const questions = {
     placement: {
       type: "choice",
@@ -38,19 +39,30 @@ export function jevQuestions(models = {}, efforts = {}) {
       criteria: efforts,
     };
   }
+  if (hasProfiles(profiles)) {
+    questions.profile_choice = {
+      type: "choice",
+      instructions: "Given `query`, which tool profile does the latest prompt need if it runs apart from this conversation?",
+      criteria: profiles,
+    };
+  }
   return questions;
 }
 
-export function classifierPrompt({ text, models = {}, efforts = {} }) {
+export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {} }) {
   const modelSection = hasModels(models)
     ? ["model: which model should handle it", list(models), ""]
     : [];
   const effortSection = hasEfforts(efforts)
     ? ["effort: how much reasoning it needs", list(efforts), ""]
     : [];
+  const profileSection = hasProfiles(profiles)
+    ? ["profile: which tools it needs if it runs apart from this conversation", list(profiles), ""]
+    : [];
   const fields = ['"placement":"..."'];
   if (hasModels(models)) fields.push('"model":"..."');
   if (hasEfforts(efforts)) fields.push('"effort":"..."');
+  if (hasProfiles(profiles)) fields.push('"profile":"..."');
   const reply = `{${fields.join(",")},"confidence":0.0-1.0}`;
   return [
     "Classify the latest user prompt in this conversation excerpt.",
@@ -60,6 +72,7 @@ export function classifierPrompt({ text, models = {}, efforts = {} }) {
     "",
     ...modelSection,
     ...effortSection,
+    ...profileSection,
     `Reply with only JSON: ${reply}`,
     "",
     "Excerpt:",
@@ -67,20 +80,22 @@ export function classifierPrompt({ text, models = {}, efforts = {} }) {
   ].join("\n");
 }
 
-export function toVerdict({ placement, model, effort, confidence }, models = {}, efforts = {}) {
+export function toVerdict({ placement, model, effort, profile, confidence }, models = {}, efforts = {}, profiles = {}) {
   if (!PLACEMENTS.includes(placement)) throw new Error(`bad placement: ${placement}`);
   if (hasModels(models) && !Object.hasOwn(models, model)) throw new Error(`bad model: ${model}`);
   if (hasEfforts(efforts) && !Object.hasOwn(efforts, effort)) throw new Error(`bad effort: ${effort}`);
+  if (hasProfiles(profiles) && !Object.hasOwn(profiles, profile)) throw new Error(`bad profile: ${profile}`);
   return {
     placement,
     model: hasModels(models) ? model : null,
     effort: hasEfforts(efforts) ? effort : null,
+    ...(hasProfiles(profiles) && { profile }),
     confidence: typeof confidence === "number" ? confidence : null,
   };
 }
 
-export function parseVerdict(text, models = {}, efforts = {}) {
+export function parseVerdict(text, models = {}, efforts = {}, profiles = {}) {
   const match = /\{[\s\S]*\}/.exec(text);
   if (!match) throw new Error("no JSON in reply");
-  return toVerdict(JSON.parse(match[0]), models, efforts);
+  return toVerdict(JSON.parse(match[0]), models, efforts, profiles);
 }

@@ -1,6 +1,6 @@
 export const AGENT_META = {
   claude: {
-    siblingCommand: (model) => `claude --bg${model ? ` --model ${model}` : ""} "<brief>"`,
+    siblingCommand: (model, flags = []) => `claude --bg${model ? ` --model ${model}` : ""}${flags.length ? ` ${flags.join(" ")} --` : ""} "<brief>"`,
     subagentModel: true,
   },
   codex: {
