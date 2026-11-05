@@ -16,14 +16,15 @@ const TURN_CHARS = 1500;
 const TEXT_CHARS = 6000;
 const MODEL_TTL_MS = 10 * 60 * 1000;
 
-export function classifyFields({ result, cls, hits, low, raw }) {
+export function classifyFields({ result, cls, hits, low, raw, downgraded }) {
   return {
     repoClass: cls,
     redactionHits: hits,
     provider: result.provider,
     heuristic: result.heuristic,
     verdict: result.verdict,
-    ...(low && { lowConfidence: true, rawVerdict: raw }),
+    ...(low && { lowConfidence: true }),
+    ...(downgraded && { downgraded, rawVerdict: raw }),
     degraded: result.degraded,
     latencyMs: result.latencyMs,
     providerMs: result.providerMs,
@@ -42,8 +43,9 @@ export async function classify(signals, config, deps) {
   const result = await runChain(names, deps.providers, { ...signals, models, efforts, text: text.slice(-TEXT_CHARS) });
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
   const raw = result.verdict;
-  if (low) result.verdict = { placement: "inline", model: null, effort: null, confidence: raw.confidence };
-  return { result, cls, hits, low, raw };
+  const downgraded = low ? "low-confidence" : signals.isFirstPrompt && raw.placement === "sibling" ? "first-prompt" : null;
+  if (downgraded) result.verdict = { placement: "inline", model: null, effort: null, confidence: raw.confidence };
+  return { result, cls, hits, low, raw, downgraded };
 }
 
 function coolingDown(nudge, contextTokens, cooldown) {
@@ -84,6 +86,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
 
   const classified = await classify(
     {
+      isFirstPrompt: !snapshot.turns.some((t) => t.role === "user" && t.text !== input.prompt),
       text: excerptOf(snapshot.turns, input.prompt),
       prompt: input.prompt,
       agent,
@@ -95,10 +98,6 @@ export async function handlePrompt({ input, agent, config, deps }) {
     deps,
   );
   const { result, low } = classified;
-  const isFirstPrompt = !snapshot.turns.some((t) => t.role === "user" && t.text !== input.prompt);
-  if (isFirstPrompt && result.verdict.placement === "sibling") {
-    result.verdict = { placement: "inline", model: null, effort: null, confidence: result.verdict.confidence };
-  }
 
   const lines = [];
   const notices = [];

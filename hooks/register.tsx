@@ -119,7 +119,7 @@ async function notify($: EngineInterface, message: string) {
   })
 }
 
-async function decide($: EngineInterface, prompt: string, trigger: string): Promise<Decision | null> {
+async function decide($: EngineInterface, prompt: string, trigger: string, isFirstPrompt = false): Promise<Decision | null> {
   const providers = createProviders(state.config, {
     config: state.config,
     env: state.env,
@@ -135,6 +135,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string): Prom
     contextTokens: (await $.session.usage()).context.tokens ?? 0,
     idleMs: 0,
     cwd,
+    isFirstPrompt,
   }
   const classified = await classify(signals, state.config, { providers, remoteOf: () => remote })
   const { result } = classified
@@ -172,7 +173,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string) {
   }
 }
 
-async function act($: EngineInterface, prompt: string, decision: Decision, isFirstPrompt: boolean): Promise<string | null> {
+async function act($: EngineInterface, prompt: string, decision: Decision): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
     const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relay' }).catch(() => null)
@@ -185,10 +186,6 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
     return `jev-relay: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
   }
   if (decision.placement !== 'sibling') return null
-  if (isFirstPrompt) {
-    void record($, { event: 'action', placement: 'sibling', outcome: 'skipped-first-prompt', model })
-    return null
-  }
 
   const answer = await $.ui.ask(`Run this in a background session (${model})?`, { options: ['Keep here', 'Run in background'], header: 'jev-relay' })
   if (answer !== 'Run in background') {
@@ -231,7 +228,7 @@ export const register: Register = on => {
     if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
 
     const isFirstPrompt = state.typedPrompts++ === 0
-    const pending = decide($, e.text, 'submit').catch(() => null)
+    const pending = decide($, e.text, 'submit', isFirstPrompt).catch(() => null)
     state.byText.set(e.text, pending)
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
     const decision = await Promise.race([pending, deadline])
@@ -239,7 +236,7 @@ export const register: Register = on => {
       state.missed.add(pending)
       void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
     }
-    const directive = decision ? await act($, e.text, decision, isFirstPrompt).catch(() => null) : null
+    const directive = decision ? await act($, e.text, decision).catch(() => null) : null
     return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
 
