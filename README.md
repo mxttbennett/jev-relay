@@ -182,13 +182,21 @@ ignore it. `efforts` lists the levels the classifier may pick and their descript
 Each nudge and each subagent model pick prints one line to you through the hook's `systemMessage`
 field. The model sees the full advice, and you see the line.
 
-By default you only see a line when jev-relayer acts, including when an inline verdict switches the
-model. Set `"report": "every-turn"` to see one on every prompt, including the skipped ones:
+The hook prints a line when it nudges, never for an inline verdict, because the hook cannot change
+the model. Set `"report": "every-turn"` to also see a line for skipped prompts:
 
 ```
 · jev-relayer: skipped · 12k tokens, cache warm
 · jev-relayer: skipped · cooling down (1/3)
-· jev-relayer: inline · sonnet · 0.80
+```
+
+The mod applies the pick, so it reports the final verdict. It writes one dim line to the transcript
+after the turn's model is settled. The line is not sent to the model:
+
+```
+jev → haiku · low · 0.90
+jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98
+jev: sonnet · low
 ```
 
 Set `"macNotifications": true` to also get a native macOS notification whenever jev-relayer acts or
@@ -213,7 +221,7 @@ The classifier reads each `description` and picks one. For a Claude sibling, jev
 `--strict-mcp-config`, `--mcp-config <file>` when `mcpConfig` is set, and `--tools <list>`. With no
 `profiles` key, nothing changes. Profiles apply to Claude siblings only. Subagents are not covered yet.
 
-### Band and status notice
+### Band and verdict line
 
 The band above the prompt shows the latest verdict, for example `jev: inline · haiku · 0.83`, with a
 Switch button when the pick differs from the session model. It is off by default:
@@ -223,8 +231,8 @@ jev-relayer band on
 jev-relayer band off
 ```
 
-The mod also prints `jev → haiku · 0.98` in the status area when it picks a model. Turn that off
-with `"statusNotice": false`. The status line's model slot still shows the routed model.
+The mod also writes its verdict line to the transcript when it picks a model or effort. Turn that
+off with `"statusNotice": false`. The status line's model slot still shows the routed model.
 
 ## Metrics
 

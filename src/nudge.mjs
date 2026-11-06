@@ -1,4 +1,5 @@
 import { AGENT_META } from "./agent-meta.mjs";
+import { tierOf } from "./tiers.mjs";
 
 export const DEGRADED_NOTICE =
   "jev-relayer: no classifier answered, so routing advice is degraded to heuristics for this session.";
@@ -19,7 +20,16 @@ export function buildNotice(verdict) {
 
 export const skipNotice = (why) => `· jev-relayer: skipped · ${why}`;
 
-export const inlineNotice = (verdict) => `· jev-relayer: inline${detail(verdict)}`;
+export function appliedNotice({ current, picked, effort, switched, blocked, contextTokens, confidence }) {
+  const tail = [effort, confidence == null ? null : confidence.toFixed(2)].filter(Boolean).map((part) => ` · ${part}`).join("");
+  if (switched) return `jev → ${picked}${tail}`;
+  const stay = tierOf(current) ?? current;
+  if (blocked) {
+    const size = `${Math.round(contextTokens / 1000)}k`;
+    return `jev: staying on ${stay} · ${tierOf(picked) ?? picked} skipped, ${size} context is cached${tail}`;
+  }
+  return `jev: ${stay}${tail}`;
+}
 
 export const modelNotice = (model) => `↪ jev-relayer: subagent model → ${model}`;
 

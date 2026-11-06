@@ -14,6 +14,7 @@ type Scenario = { model: string; contextTokens: number }
 function engine(scenario: Scenario, verdict: { model: string; effort?: string }) {
   const sessionId = `s${++sessions}`
   const files = new Map<string, string>()
+  const statuses: string[] = []
   const $: any = {
     env: { get: async (key: string) => ({ HOME: '/home/t', OPENROUTER_API_KEY: 'k' })[key] },
     fs: {
@@ -44,13 +45,13 @@ function engine(scenario: Scenario, verdict: { model: string; effort?: string })
       }),
     },
     clock: { after: () => {} },
-    ui: { status: async () => {} },
+    ui: { status: () => {}, log: (text: string) => void statuses.push(text) },
   }
   const records = () =>
     [...files.entries()]
       .filter(([path]) => path.includes('/mod/'))
       .flatMap(([, text]) => text.split('\n').filter(Boolean).map(line => JSON.parse(line)))
-  return { $, records, scenario }
+  return { $, records, scenario, statuses }
 }
 
 async function startSession($: any) {
@@ -80,22 +81,24 @@ beforeEach(() => setSystemTime())
 describe('inline switching in the mod', () => {
   test('blocks a downgrade on a warm large context', async () => {
     // Arrange
-    const { $, records } = engine({ model: 'opus', contextTokens: 80_000 }, { model: 'haiku' })
+    const { $, records, statuses } = engine({ model: 'opus', contextTokens: 80_000 }, { model: 'haiku' })
     await startSession($)
     // Act
     const step = await typedTurn($, 'rename the variable', 't1')
     // Assert
     expect(step.model).toBeUndefined()
     expect(applied(records)).toMatchObject({ switched: false, downgrade: false, downgradeBlocked: true })
+    expect(statuses).toEqual(['jev: staying on opus · haiku skipped, 80k context is cached · low · 0.90'])
   })
 
   test('applies a downgrade on a small context and records cache creation tokens', async () => {
     // Arrange
-    const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
+    const { $, records, statuses } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
     await startSession($)
     // Act
     const step = await typedTurn($, 'rename the variable', 't1')
     // Assert
+    expect(statuses).toEqual(['jev → haiku · low · 0.90'])
     expect(step.model).toBe('haiku')
     expect(applied(records)).toMatchObject({ switched: true, downgrade: true, downgradeBlocked: false, cacheCreationTokens: 40 })
   })
