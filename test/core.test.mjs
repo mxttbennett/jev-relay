@@ -130,8 +130,9 @@ test("ollama provider sends think:true and reads message.content", async () => {
     body = JSON.parse(init.body);
     return { ok: true, json: async () => ({ message: { content: '{"placement":"inline","model":"sonnet"}' } }) };
   };
-  const providers = createProviders(DEFAULTS, { config: DEFAULTS, env: {}, fetch });
-  const verdict = await providers["qwen-pc"].run({ text: "user: hi", models: { sonnet: "d" } });
+  const config = merge(DEFAULTS, { providers: { local: { type: "ollama", baseUrl: "http://127.0.0.1:11435", model: "bonsai-2:27b", timeoutMs: 6000 } } });
+  const providers = createProviders(config, { config, env: {}, fetch });
+  const verdict = await providers.local.run({ text: "user: hi", models: { sonnet: "d" } });
   assert.equal(body.think, true);
   assert.equal(body.model, "bonsai-2:27b");
   assert.equal(verdict.model, "sonnet");

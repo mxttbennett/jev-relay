@@ -89,6 +89,10 @@ The mod differs from the hook in four ways:
 - It runs the turn on the model the classifier picks when the verdict is inline. `/model` stops it
   for that session.
 - A subagent verdict adds an instruction to delegate, and the picked model applies to the subagent.
+- Switching to a stronger model always happens. Switching to a cheaper one happens inline only when
+  the context is under `gate.coldMinTokens` or the cache has been idle for `gate.cacheTtlMs`.
+  Otherwise the session stays on its model, because a switch re-reads the whole context at full
+  price. Delegating to a subagent or sibling avoids that cost.
 - A sibling verdict asks you to approve. Approving runs `claude --bg` (or a background subagent
   where the CLI is unavailable) with your prompt as the brief.
 
@@ -111,16 +115,19 @@ Each repo class tries its providers in order and uses the first that answers.
 | Repo class | Default chain |
 | --- | --- |
 | personal (origin matches `personalRemotePatterns`) | `jev`, `heuristics` |
-| work (everything else, including no remote) | `qwen-pc`, `qwen`, `heuristics` |
+| work (everything else, including no remote) | `jev`, `heuristics` |
 
-Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristics`.
+Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristics`. `ollama` and
+`openai-compat` need a `providers` entry of your own, such as a local model, before a chain can
+name them.
 
 If every classifier fails, the hook says so once per session and falls back to heuristics.
 
 ### Privacy
 
-- Work repos never reach a remote provider.
-- A redaction hit in a personal repo drops the remote provider for that prompt.
+- Prompts are redacted before they leave the machine, in personal and work repos alike.
+- A redaction hit drops the remote provider for that prompt, so heuristics answer instead.
+- To keep a repo class off remote providers, set its chain to local providers and `heuristics`.
 - Tool results are never sent. Only prompts and assistant prose are.
 
 ## Configure
@@ -128,7 +135,7 @@ If every classifier fails, the hook says so once per session and falls back to h
 Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relayer/config.json`:
 
 ```json
-{ "chains": { "work": ["qwen", "heuristics"] }, "redact": { "names": ["Acme"] } }
+{ "chains": { "work": ["heuristics"] }, "redact": { "names": ["Acme"] } }
 ```
 
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,
@@ -232,6 +239,7 @@ Both paths write JSONL events with no prompt text, only lengths. The hooks appen
 | `agent` / `spawn-model` | hook / mod | subagent model pick and its source (`classifier`, `cached`, `explicit`) |
 | `applied` | mod | model and effort applied, the model that served the turn, whether it matches the pick, token usage |
 | `action` | mod | subagent spawned, sibling accepted, declined or failed |
+| `regret` | mod | the prompt after a downgraded turn read as a correction or retry |
 | `manual` | mod | you changed the model yourself, which stops routing for the session |
 | `deadline-miss` | mod | the classifier answered too late to affect the turn |
 
@@ -251,10 +259,18 @@ Read the report as a checklist:
   struggled with.
 - **Manual overrides and sibling acceptance**: you rejecting the router is the clearest wrong signal.
 - **Served ≠ picked**: the router asked for one model and another answered.
+- **Estimated cost**: the mod prices each turn's token usage by the model that served it and compares
+  it with the same tokens on the session model. Prices per million tokens are in `pricing` and
+  are estimates. Turns logged before this feature have no cache-write count and are left out.
+- **Downgrades, blocked and regret**: a downgrade is a switch to a cheaper tier. Regret is the share
+  of downgrades whose next prompt starts like a correction ("no", "try again", "still failing").
+  If regret climbs, loosen the model descriptions in `models`.
 - **Gate skip rate**: how often the gate hides turns the router could have helped.
 
 ## Develop
 
 ```bash
-npm test
+npm test             # modules and hooks, on Node
+npm run test:mod     # the mod (hooks/register.tsx) against a fake engine, needs Bun
+npm run typecheck    # tsc over the mod and the .mjs modules it imports
 ```
