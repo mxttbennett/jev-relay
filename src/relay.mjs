@@ -41,7 +41,7 @@ export async function classify(signals, config, deps) {
   const { efforts } = config;
   const profiles = signals.agent === "claude" ? profileDescriptions(config.profiles) : {};
   const names = config.chains[cls].filter(
-    (name) => !(cls === "personal" && hits > 0 && deps.providers[name]?.remote),
+    (name) => !(hits > 0 && deps.providers[name]?.remote),
   );
   const result = await runChain(names, deps.providers, { ...signals, models, efforts, profiles, text: text.slice(-TEXT_CHARS) }, deps.breaker);
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;

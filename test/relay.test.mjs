@@ -66,23 +66,27 @@ test("cooldown silences the next prompts, then re-evaluates", async () => {
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /subagent/);
 });
 
-test("a redaction hit in a personal repo keeps the prompt away from remote providers", async () => {
-  let called = false;
-  const jev = { remote: true, heuristic: false, run: async () => { called = true; return { placement: "inline", model: "sonnet" }; } };
-  const { deps, config } = setup({ providers: { jev, heuristics } });
-  await handlePrompt({ input: { ...input, prompt: "email jo@acme.com about it" }, agent: "claude", config, deps });
-  assert.equal(called, false);
+test("a redaction hit keeps the prompt away from remote providers in personal and work repos", async () => {
+  for (const remote of ["git@github-personal:mxttbennett/x.git", "git@github.com:acme-corp/work-app.git"]) {
+    // Arrange
+    let called = false;
+    const jev = { remote: true, heuristic: false, run: async () => { called = true; return { placement: "inline", model: "sonnet" }; } };
+    const { deps, config } = setup({ providers: { jev, heuristics }, remote });
+    // Act
+    await handlePrompt({ input: { ...input, prompt: "email jo@acme.com about it" }, agent: "claude", config, deps });
+    // Assert
+    assert.equal(called, false, remote);
+  }
 });
 
-test("work repos use the local chain and never the remote provider", async () => {
-  let remoteCalled = false;
-  const jev = { remote: true, heuristic: false, run: async () => { remoteCalled = true; return { placement: "inline", model: "opus" }; } };
-  const { deps, config } = setup({
-    remote: "git@github.com:acme-corp/work-app.git",
-    providers: { jev, "qwen-pc": answer({ placement: "subagent", model: "sonnet" }), qwen: down(), heuristics },
-  });
-  assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /subagent with model sonnet/);
-  assert.equal(remoteCalled, false);
+test("work repos classify through the remote provider when the prompt is clean", async () => {
+  // Arrange
+  const jev = answer({ placement: "subagent", model: "sonnet" }, true);
+  const { deps, config } = setup({ remote: "git@github.com:acme-corp/work-app.git", providers: { jev, heuristics } });
+  // Act
+  const context = await handlePrompt({ input, agent: "claude", config, deps });
+  // Assert
+  assert.match(context, /subagent with model sonnet/);
 });
 
 test("degraded notice appears once per session and re-arms after a success", async () => {
@@ -194,11 +198,10 @@ test("a sibling verdict below siblingMinConfidence is treated as inline, one abo
 
 test("a low-confidence log entry keeps a redacted, truncated prompt, and a confident one does not", async () => {
   const low = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.3 }, true), heuristics }, remote: "git@github.com:work/x.git" });
-  low.config = { ...low.config, redact: { names: ["Acme"] }, chains: { ...low.config.chains, work: ["jev", "heuristics"] } };
-  const long = `ask Acme about ${"x".repeat(400)}`;
+  const long = `ask about 1234567 ${"x".repeat(400)}`;
   await run({ input: { ...input, prompt: long }, agent: "claude", config: low.config, deps: low.deps });
   assert.ok(low.logs[0].prompt.length <= 200);
-  assert.ok(!low.logs[0].prompt.includes("Acme"));
+  assert.ok(!low.logs[0].prompt.includes("1234567"));
   const high = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
   await run({ input, agent: "claude", config: high.config, deps: high.deps });
   assert.equal("prompt" in high.logs[0], false);

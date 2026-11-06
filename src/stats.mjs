@@ -1,5 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { loadConfig } from "./config.mjs";
+import { costSummary } from "./cost.mjs";
 import { STATE_DIR } from "./state.mjs";
 
 const DAY_MS = 86_400_000;
@@ -54,7 +56,7 @@ const count = (items, key) => {
 const rate = (n, total) => (total ? Number((n / total).toFixed(3)) : null);
 const sorted = (obj) => Object.fromEntries(Object.entries(obj).sort((a, b) => b[1] - a[1]));
 
-export function summarize(events) {
+export function summarize(events, pricing = loadConfig().pricing) {
   const of = (name) => events.filter((e) => e.event === name);
   const decisions = events.filter((e) => e.event === "prompt" || e.event === "decision");
   const hookPrompts = of("prompt");
@@ -147,9 +149,13 @@ export function summarize(events) {
       subagentModelSource: sorted(count(agents, (e) => e.source)),
       subagentModelPicks: sorted(count(agents.filter((e) => e.model), (e) => e.model)),
       spawnPickRate: rate(spawns.filter((e) => e.picked).length, spawns.length),
+      downgrades: applied.filter((e) => e.downgrade).length,
+      blockedDowngrades: applied.filter((e) => e.downgradeBlocked).length,
+      regretRate: rate(of("regret").length, applied.filter((e) => e.downgrade).length),
     },
     cost: {
       modelByServed: sorted(count(applied, (e) => e.served)),
+      estimate: costSummary(applied.filter((e) => e.cacheCreationTokens !== undefined), pricing),
       meanInputTokens: (() => {
         const v = applied.map((e) => e.inputTokens).filter((x) => x != null);
         return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
@@ -203,10 +209,12 @@ export function formatSummary(s) {
     "  subagent model picks:",
     table(s.outcomes.subagentModelPicks),
     `  agent.spawn picked a model ${pct(s.outcomes.spawnPickRate)}`,
+    `  downgrades ${s.outcomes.downgrades} · blocked by warm cache ${s.outcomes.blockedDowngrades} · regret ${pct(s.outcomes.regretRate)}`,
     "",
     "Served models",
     table(s.cost.modelByServed),
     `  mean uncached input tokens ${s.cost.meanInputTokens ?? "n/a"}`,
+    `  estimated cost $${s.cost.estimate.actual.toFixed(2)} vs $${s.cost.estimate.baseline.toFixed(2)} on the session model · saved $${s.cost.estimate.saved.toFixed(2)} (${s.cost.estimate.turns} turns)`,
   ];
   return lines.join("\n");
 }

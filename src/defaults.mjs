@@ -1,5 +1,7 @@
-const FAST = "Quick lookups, formatting, boilerplate, low-stakes small edits";
-const BALANCED = "Default day-to-day coding, feature work, most agentic building";
+const FAST =
+  "Lookups, explaining code, git, test and build chores, renames, formatting, boilerplate, and edits whose change is already specified. Prefer this whenever the task is clear and low-risk";
+const BALANCED =
+  "Feature work and debugging where the approach is not yet obvious, and edits spanning several files. Not for work that is merely long or tedious";
 const STRONG =
   "Architecture decisions, hard debugging, security-sensitive work, large multi-file refactors, complex planning";
 
@@ -29,6 +31,11 @@ export const DEFAULTS = {
     ],
   },
   cooldown: { prompts: 3, growth: 0.25 },
+  pricing: {
+    haiku: { input: 1, cacheRead: 0.1, cacheWrite: 1.25, output: 5 },
+    sonnet: { input: 3, cacheRead: 0.3, cacheWrite: 3.75, output: 15 },
+    opus: { input: 5, cacheRead: 0.5, cacheWrite: 6.25, output: 25 },
+  },
   minConfidence: 0.6,
   siblingMinConfidence: 0.85,
   band: { enabled: false },
@@ -38,31 +45,19 @@ export const DEFAULTS = {
   personalRemotePatterns: ["mxttbennett", "github-personal"],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
   efforts: {
-    low: "Mechanical or lookup work that needs little reasoning",
-    medium: "Typical coding, explanation and review",
+    low: "Mechanical, lookup or clearly specified work. The default unless the task needs weighing options",
+    medium: "Coding or review that needs weighing options or tracing behavior across files",
     high: "Hard debugging, design and multi-step reasoning",
     xhigh: "The hardest work where extra reasoning pays off",
   },
   profiles: {},
   redact: { names: [] },
   chains: {
-    work: ["qwen-pc", "qwen", "heuristics"],
+    work: ["jev", "heuristics"],
     personal: ["jev", "heuristics"],
   },
   providers: {
     jev: { type: "jev", timeoutMs: 5000 },
-    "qwen-pc": {
-      type: "ollama",
-      baseUrl: "http://127.0.0.1:11435",
-      model: "bonsai-2:27b",
-      timeoutMs: 6000,
-    },
-    qwen: {
-      type: "openai-compat",
-      baseUrl: "http://localhost:1234/v1",
-      modelMatch: "qwen",
-      timeoutMs: 6000,
-    },
     heuristics: { type: "heuristics" },
   },
 };

@@ -6,6 +6,9 @@ import { claudeProfileFlags } from '../src/profiles.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { decisionLabel, isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, classifyFields } from '../src/relay.mjs'
+import { allowsInlineSwitch } from '../src/switching.mjs'
+import { isDowngrade, tierOf } from '../src/tiers.mjs'
+import { isCorrection } from '../src/regret.mjs'
 import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
@@ -30,6 +33,8 @@ const state = {
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
   typedPrompts: 0,
+  lastStopAt: 0,
+  lastWasDowngrade: false,
   siblingQuietUntil: 0,
   home: '',
   missed: new WeakSet<object>(),
@@ -78,9 +83,7 @@ const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable
 const TYPED_ORIGINS = ['composer', 'bridge', 'sdk']
 const RESULT_PREFIX = 'jev-relayer: the subagent finished.'
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']
-const TIERS = ['haiku', 'sonnet', 'opus']
-const tierOf = (model: string) => TIERS.find(tier => model.toLowerCase().includes(tier)) ?? model.toLowerCase()
-const isAlias = (model: string) => TIERS.includes(model.toLowerCase())
+const isAlias = (model: string) => ['haiku', 'sonnet', 'opus'].includes(model.toLowerCase())
 const isSameModel = (a: string, b: string) => {
   const [x, y] = [a.toLowerCase(), b.toLowerCase()]
   return x === y || (isAlias(x) && y.includes(x)) || (isAlias(y) && x.includes(y))
@@ -243,6 +246,8 @@ export const register: Register = on => {
     if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
 
     const isFirstPrompt = state.typedPrompts++ === 0
+    if (state.lastWasDowngrade && isCorrection(e.text)) void record($, { event: 'regret' })
+    state.lastWasDowngrade = false
     const pending = decide($, e.text, 'submit', isFirstPrompt).catch(() => null)
     state.byText.set(e.text, pending)
     const deadline = new Promise<undefined>(resolve => $.clock.after(DEADLINE_MS, () => resolve(undefined)))
@@ -277,7 +282,12 @@ export const register: Register = on => {
       return yield* next(e)
     }
     const picked = decision?.placement === 'inline' ? decision.model : null
-    const model = picked && !isSameModel(picked, current) ? picked : null
+    const wantsSwitch = picked !== null && !isSameModel(picked, current)
+    const contextTokens = wantsSwitch ? ((await $.session.usage().catch(() => null))?.context.tokens ?? 0) : 0
+    const idleMs = state.lastStopAt ? Date.now() - state.lastStopAt : 0
+    const allowed = wantsSwitch && allowsInlineSwitch({ current, picked, contextTokens, idleMs }, state.config.gate)
+    const model = allowed ? picked : null
+    const downgrade = Boolean(model) && isDowngrade(current, model)
     const wanted = decision?.placement === 'inline' ? decision.effort : null
     const effort = wanted && EFFORTS.includes(wanted) && e.effort !== undefined ? wanted : null
     const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)
@@ -296,9 +306,14 @@ export const register: Register = on => {
           servedMatches: picked && served ? isSameModel(picked, served) : null,
           inputTokens: chunk.usage?.input_tokens ?? null,
           cacheReadTokens: chunk.usage?.cache_read_input_tokens ?? null,
+          cacheCreationTokens: chunk.usage?.cache_creation_input_tokens ?? 0,
+          downgrade,
+          downgradeBlocked: wantsSwitch && !allowed,
           outputTokens: chunk.usage?.output_tokens ?? null,
         })
-        if (picked && served) void publish($, { tier: tierOf(served), model: served, effort })
+        state.lastStopAt = Date.now()
+        state.lastWasDowngrade = downgrade
+        if (picked && served) void publish($, { tier: tierOf(served) ?? served.toLowerCase(), model: served, effort })
       }
       yield chunk
     }
