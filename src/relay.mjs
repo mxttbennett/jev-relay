@@ -78,8 +78,9 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const snapshot = deps.readTranscript(input.transcript_path);
   const contextTokens = snapshot.contextTokens;
   const idleMs = snapshot.lastAt ? deps.now() - snapshot.lastAt : 0;
+  const priorPrompts = snapshot.turns.filter((t) => t.role === "user" && t.text !== input.prompt).length;
   const everyTurn = config.report === "every-turn";
-  if (!shouldClassify({ contextTokens, idleMs, prompt: input.prompt }, config.gate)) {
+  if (!shouldClassify({ contextTokens, idleMs, prompt: input.prompt, priorPrompts }, config.gate)) {
     const cache = idleMs >= config.gate.cacheTtlMs ? "cold" : "warm";
     const why = `${Math.round(contextTokens / 1000)}k tokens, cache ${cache}`;
     deps.state.log({ event: "skip", reason: "gate", agent, session: input.session_id, contextTokens, idleMs, cache });

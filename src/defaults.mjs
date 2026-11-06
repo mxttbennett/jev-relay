@@ -21,6 +21,7 @@ export const DEFAULTS = {
     contextTokens: 100000,
     cacheTtlMs: 300000,
     coldMinTokens: 20000,
+    earlyPrompts: 3,
     heavyFloorTokens: 40000,
     heavyPatterns: [
       "(^|\\s)/(peer-review-pr|deep-plan|quick-wins|untested|code-review|security-review|parallel|babysit-pr|update-cogniform-sdk|archive-transcripts)\\b",
