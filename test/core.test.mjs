@@ -35,12 +35,18 @@ test("gate opens on size, or on a cold cache with a non-trivial context", () => 
   assert.equal(shouldClassify({ contextTokens: 30000, idleMs: 1000 }, gate), false);
 });
 
+test("gate opens for the first earlyPrompts prompts whatever the context size", () => {
+  assert.equal(shouldClassify({ contextTokens: 62000, idleMs: 0, priorPrompts: 0 }, gate), true);
+  assert.equal(shouldClassify({ contextTokens: 62000, idleMs: 0, priorPrompts: gate.earlyPrompts - 1 }, gate), true);
+  assert.equal(shouldClassify({ contextTokens: 62000, idleMs: 0, priorPrompts: gate.earlyPrompts }, gate), false);
+});
+
 test("heuristics nudge only on a clear signal", () => {
   const big = { contextTokens: 150000, idleMs: 0 };
   assert.equal(heuristicVerdict({ prompt: "audit every file for X", ...big }, gate).placement, "subagent");
   assert.equal(heuristicVerdict({ prompt: "new task: unrelated cleanup", ...big }, gate).placement, "sibling");
   assert.equal(heuristicVerdict({ prompt: "fix that typo", ...big }, gate).placement, "inline");
-  assert.equal(heuristicVerdict({ prompt: "audit every file", contextTokens: 1000, idleMs: 0 }, gate).placement, "inline");
+  assert.equal(heuristicVerdict({ prompt: "audit every file", contextTokens: 30000, idleMs: 0 }, gate).placement, "inline");
 });
 
 test("parseVerdict reads JSON inside prose and rejects bad enums", () => {

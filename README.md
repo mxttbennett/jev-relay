@@ -100,6 +100,7 @@ The mod differs from the hook in four ways:
 
 The hook skips a prompt unless one of these holds:
 
+- The session is young: fewer than `gate.earlyPrompts` (3) earlier prompts, whatever the context size. A fresh session already carries tens of thousands of tokens of system prompt and tools, so a size floor cannot catch it.
 - The conversation is large (`gate.contextTokens`, 100k).
 - The cache is cold on a context of at least `gate.coldMinTokens` (20k).
 - The prompt looks heavy and the context is at least `gate.heavyFloorTokens` (40k).
@@ -186,7 +187,7 @@ The hook prints a line when it nudges, never for an inline verdict, because the 
 the model. Set `"report": "every-turn"` to also see a line for skipped prompts:
 
 ```
-· jev-relayer: skipped · 12k tokens, cache warm
+· jev-relayer: skipped · 30k tokens, cache warm
 · jev-relayer: skipped · cooling down (1/3)
 ```
 

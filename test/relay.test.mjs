@@ -31,7 +31,7 @@ const priorTurn = { contextTokens: 150000, lastAt: 1_000_000, turns: [{ role: "u
 const input = { session_id: "s", prompt: "audit the repo", cwd: "/x", transcript_path: "/t" };
 
 test("silent below the gate", async () => {
-  const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics }, snapshot: { contextTokens: 1000, lastAt: 1_000_000, turns: [] } });
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics }, snapshot: { contextTokens: 30000, lastAt: 1_000_000, turns: [1, 2, 3].map((n) => ({ role: "user", text: `earlier ${n}` })) } });
   assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
 });
 
@@ -151,9 +151,9 @@ test("notices show the verdict confidence when the classifier reports one", asyn
 
 test("every-turn reporting says when a turn was skipped or cooling down", async () => {
   const every = (config) => merge(config, { report: "every-turn" });
-  const small = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics }, snapshot: { contextTokens: 12000, lastAt: 1_000_000, turns: [] } });
+  const small = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics }, snapshot: { contextTokens: 30000, lastAt: 1_000_000, turns: [1, 2, 3].map((n) => ({ role: "user", text: `earlier ${n}` })) } });
   const skipped = await run({ input, agent: "claude", config: every(small.config), deps: small.deps });
-  assert.deepEqual(skipped, { context: "", notice: "· jev-relayer: skipped · 12k tokens, cache warm" });
+  assert.deepEqual(skipped, { context: "", notice: "· jev-relayer: skipped · 30k tokens, cache warm" });
   assert.equal(await run({ input, agent: "claude", config: small.config, deps: small.deps }), null);
 
   const cooling = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });

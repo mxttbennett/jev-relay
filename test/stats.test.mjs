@@ -51,7 +51,7 @@ test("a classified prompt logs latency, nudge and the raw verdict behind a low-c
 });
 
 test("gate and cooldown skips are logged with their reason", async () => {
-  const small = setup({ jev: answer({ placement: "inline" }), heuristics }, { contextTokens: 1000, lastAt: 1_000_000, turns: [] });
+  const small = setup({ jev: answer({ placement: "inline" }), heuristics }, { contextTokens: 30000, lastAt: 1_000_000, turns: [1, 2, 3].map((n) => ({ role: "user", text: `earlier ${n}` })) });
   await handlePrompt({ input, agent: "claude", config: DEFAULTS, deps: small.deps });
   assert.deepEqual(small.logs.map((e) => [e.event, e.reason]), [["skip", "gate"]]);
 

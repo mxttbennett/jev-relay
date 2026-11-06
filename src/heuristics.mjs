@@ -15,14 +15,15 @@ function matches(patterns, prompt) {
 
 export const isHeavy = (prompt, gate) => matches(gate.heavyPatterns, prompt ?? "");
 
-export function shouldClassify({ contextTokens, idleMs, prompt }, gate) {
+export function shouldClassify({ contextTokens, idleMs, prompt, priorPrompts = Infinity }, gate) {
+  if (priorPrompts < gate.earlyPrompts) return true;
   if (contextTokens >= gate.contextTokens) return true;
   if (idleMs >= gate.cacheTtlMs && contextTokens >= gate.coldMinTokens) return true;
   return contextTokens >= gate.heavyFloorTokens && isHeavy(prompt, gate);
 }
 
-export function heuristicVerdict({ prompt, contextTokens, idleMs }, gate) {
-  const open = shouldClassify({ contextTokens, idleMs, prompt }, gate);
+export function heuristicVerdict({ prompt, contextTokens, idleMs, priorPrompts }, gate) {
+  const open = shouldClassify({ contextTokens, idleMs, prompt, priorPrompts }, gate);
   if (open && INDEPENDENT.test(prompt)) {
     return { placement: "sibling", model: null, effort: null, confidence: 0.5 };
   }
