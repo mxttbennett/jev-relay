@@ -10,11 +10,12 @@ import { appliedNotice } from '../src/nudge.mjs'
 import { allowsInlineSwitch } from '../src/switching.mjs'
 import { isDowngrade, tierOf } from '../src/tiers.mjs'
 import { isCorrection } from '../src/regret.mjs'
+import { taskLabel } from '../src/task-label.mjs'
 import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
-type Decision = { placement: string; model: string | null; effort: Effort | null; profile?: string; confidence: number | null }
+type Decision = { placement: string; model: string | null; effort: Effort | null; profile?: string; title?: string; confidence: number | null }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -161,7 +162,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return result.verdict
 }
 
-async function spawnSibling($: EngineInterface, prompt: string, model: string, profile?: string) {
+async function spawnSibling($: EngineInterface, prompt: string, model: string, profile?: string, title?: string) {
   const cwd = await $.session.cwd()
   const flags = claudeProfileFlags(profile ? state.config.profiles[profile] : undefined, state.home)
   try {
@@ -171,7 +172,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, p
     if (!isUnavailable(err)) return false
   }
   try {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: 'Handoff from jev-relayer', cwd })
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: title ?? taskLabel(prompt), cwd })
     if ('agentId' in started && started.agentId) state.spawned.add(started.agentId)
     return 'agentId' in started
   } catch {
@@ -182,7 +183,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, p
 async function act($: EngineInterface, prompt: string, decision: Decision, isFirstPrompt: boolean): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relayer' }).catch(() => null)
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
@@ -207,7 +208,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
     void record($, { event: 'action', placement: 'sibling', outcome: 'declined', model })
     return null
   }
-  if (!(await spawnSibling($, prompt, model, decision.profile))) {
+  if (!(await spawnSibling($, prompt, model, decision.profile, decision.title))) {
     void record($, { event: 'action', placement: 'sibling', outcome: 'spawn-failed', model })
     return null
   }

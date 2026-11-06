@@ -63,7 +63,7 @@ export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {
   if (hasModels(models)) fields.push('"model":"..."');
   if (hasEfforts(efforts)) fields.push('"effort":"..."');
   if (hasProfiles(profiles)) fields.push('"profile":"..."');
-  const reply = `{${fields.join(",")},"confidence":0.0-1.0}`;
+  const reply = `{${fields.join(",")},"title":"...","confidence":0.0-1.0}`;
   return [
     "Classify the latest user prompt in this conversation excerpt.",
     "",
@@ -73,6 +73,8 @@ export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {
     ...modelSection,
     ...effortSection,
     ...profileSection,
+    "title: a 3-5 word label for the task, as a short imperative phrase",
+    "",
     `Reply with only JSON: ${reply}`,
     "",
     "Excerpt:",
@@ -80,7 +82,7 @@ export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {
   ].join("\n");
 }
 
-export function toVerdict({ placement, model, effort, profile, confidence }, models = {}, efforts = {}, profiles = {}) {
+export function toVerdict({ placement, model, effort, profile, title, confidence }, models = {}, efforts = {}, profiles = {}) {
   if (!PLACEMENTS.includes(placement)) throw new Error(`bad placement: ${placement}`);
   if (hasModels(models) && !Object.hasOwn(models, model)) throw new Error(`bad model: ${model}`);
   if (hasEfforts(efforts) && !Object.hasOwn(efforts, effort)) throw new Error(`bad effort: ${effort}`);
@@ -90,6 +92,7 @@ export function toVerdict({ placement, model, effort, profile, confidence }, mod
     model: hasModels(models) ? model : null,
     effort: hasEfforts(efforts) ? effort : null,
     ...(hasProfiles(profiles) && { profile }),
+    ...(typeof title === "string" && title.trim() && { title: title.trim() }),
     confidence: typeof confidence === "number" ? confidence : null,
   };
 }
