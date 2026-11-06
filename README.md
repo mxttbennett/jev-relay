@@ -188,7 +188,16 @@ model. Set `"report": "every-turn"` to see one on every prompt, including the sk
 ```
 · jev-relayer: skipped · 12k tokens, cache warm
 · jev-relayer: skipped · cooling down (1/3)
-· jev-relayer: inline · sonnet · 0.80
+· jev-relayer: inline · suggests sonnet · 0.80
+```
+
+The hook only advises, so its inline line says `suggests`. The mod applies the pick and its status
+line (`statusNotice`) says what happened:
+
+```
+jev → haiku · low · 0.90
+jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98
+jev: sonnet · low
 ```
 
 Set `"macNotifications": true` to also get a native macOS notification whenever jev-relayer acts or
