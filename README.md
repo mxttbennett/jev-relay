@@ -270,5 +270,7 @@ Read the report as a checklist:
 ## Develop
 
 ```bash
-npm test
+npm test             # modules and hooks, on Node
+npm run test:mod     # the mod (hooks/register.tsx) against a fake engine, needs Bun
+npm run typecheck    # tsc over the mod and the .mjs modules it imports
 ```

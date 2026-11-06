@@ -55,7 +55,7 @@ async function load($: EngineInterface) {
   const read = async (dir: string) => resolveConfig(JSON.parse(await $.fs.read(`${home}/.config/${dir}/config.json`)))
   state.config = await read('jev-relayer').catch(() => read('jev-relay')).catch(() => resolveConfig())
   try {
-    state.jevEnv = parseEnv(await $.fs.read(`${home}/.config/jev-opus/.env`))
+    state.jevEnv = parseEnv(await $.fs.read(`${home}/.config/jev-opus/.env`)) as Vars
   } catch {
     state.jevEnv = {}
   }
@@ -107,7 +107,7 @@ async function record($: EngineInterface, entry: Record<string, unknown>) {
     if (!state.logs.has(session)) {
       const path = `${state.home}/.local/state/jev-relayer/mod/${session}.jsonl`
       const existing = await $.fs.read(path).catch(() => '')
-      state.logs.set(session, createBufferedLog(text => $.fs.write(path, text), typeof existing === 'string' ? existing : ''))
+      state.logs.set(session, createBufferedLog((text: string) => $.fs.write(path, text), typeof existing === 'string' ? existing : ''))
     }
     await state.logs.get(session)!({ agent: 'claude', session, ...entry })
   } catch {
@@ -122,7 +122,7 @@ async function notify($: EngineInterface, message: string) {
   await sendNotification({
     message,
     readTranscript: () => $.fs.read(path),
-    run: argv => $.process.run(argv, { timeoutMs: 3000 }),
+    run: (argv: string[]) => $.process.run(argv, { timeoutMs: 3000 }),
   })
 }
 
@@ -174,7 +174,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, p
   }
   try {
     const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: 'Handoff from jev-relayer', cwd })
-    if ('agentId' in started) state.spawned.add(started.agentId)
+    if ('agentId' in started && started.agentId) state.spawned.add(started.agentId)
     return 'agentId' in started
   } catch {
     return false
@@ -185,7 +185,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
     const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: 'Handoff from jev-relayer' }).catch(() => null)
-    if (started && 'agentId' in started) {
+    if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
       return `jev-relayer: a subagent (${started.model}) is already working on the user's request. Reply with one short sentence saying so and stop; its result arrives when it finishes.`
@@ -221,6 +221,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await load($)
     state.typedPrompts = 0
+    state.lastStopAt = 0
+    state.lastWasDowngrade = false
     state.siblingQuietUntil = 0
     state.baseline = await $.session.model()
     return next(e)
