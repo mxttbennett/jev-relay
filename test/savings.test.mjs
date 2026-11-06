@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { costSummary, turnCost } from "../src/cost.mjs";
 import { DEFAULTS } from "../src/defaults.mjs";
+import { appliedNotice, inlineNotice } from "../src/nudge.mjs";
 import { isCorrection } from "../src/regret.mjs";
 import { formatSummary, summarize } from "../src/stats.mjs";
 import { allowsInlineSwitch } from "../src/switching.mjs";
@@ -108,4 +109,19 @@ test("default chains no longer reference local qwen providers", () => {
   // Arrange & Act & Assert
   assert.deepEqual(DEFAULTS.chains.work, ["jev", "heuristics"]);
   assert.deepEqual(Object.keys(DEFAULTS.providers), ["jev", "heuristics"]);
+});
+
+test("appliedNotice says what happened: switched, blocked or unchanged", () => {
+  // Arrange
+  const base = { current: "claude-opus-5-5", picked: "haiku", effort: "low", contextTokens: 151_535, confidence: 0.98 };
+  // Act & Assert
+  assert.equal(appliedNotice({ ...base, switched: true, blocked: false }), "jev → haiku · low · 0.98");
+  assert.equal(appliedNotice({ ...base, switched: false, blocked: true }), "jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98");
+  assert.equal(appliedNotice({ ...base, picked: "opus", switched: false, blocked: false, confidence: null }), "jev: opus · low");
+});
+
+test("inlineNotice marks the model as a suggestion", () => {
+  // Arrange & Act & Assert
+  assert.equal(inlineNotice({ placement: "inline", model: "haiku", confidence: 0.98 }), "· jev-relayer: inline · suggests haiku · 0.98");
+  assert.equal(inlineNotice({ placement: "inline", model: null, confidence: null }), "· jev-relayer: inline");
 });

@@ -96,7 +96,7 @@ test("degraded notice appears once per session and re-arms after a success", asy
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
   assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
   providers.jev = answer({ placement: "inline", model: "sonnet" }, true);
-  assert.deepEqual(await run({ input, agent: "claude", config, deps }), { context: "", notice: "· jev-relayer: inline · sonnet" });
+  assert.deepEqual(await run({ input, agent: "claude", config, deps }), { context: "", notice: "· jev-relayer: inline · suggests sonnet" });
   providers.jev = down(true);
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);
 });
@@ -150,7 +150,7 @@ test("notices show the verdict confidence when the classifier reports one", asyn
 
   const inline = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet", confidence: 0.75 }, true), heuristics } });
   const out = await run({ input, agent: "claude", config: merge(inline.config, { report: "every-turn" }), deps: inline.deps });
-  assert.equal(out.notice, "· jev-relayer: inline · sonnet · 0.75");
+  assert.equal(out.notice, "· jev-relayer: inline · suggests sonnet · 0.75");
 });
 
 test("every-turn reporting says when a turn was skipped, cooling down, or judged inline", async () => {
@@ -162,7 +162,7 @@ test("every-turn reporting says when a turn was skipped, cooling down, or judged
 
   const big = setup({ providers: { jev: answer({ placement: "inline", model: "sonnet" }, true), heuristics } });
   const inline = await run({ input, agent: "claude", config: every(big.config), deps: big.deps });
-  assert.deepEqual(inline, { context: "", notice: "· jev-relayer: inline · sonnet" });
+  assert.deepEqual(inline, { context: "", notice: "· jev-relayer: inline · suggests sonnet" });
 
   const cooling = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
   await run({ input, agent: "claude", config: every(cooling.config), deps: cooling.deps });
@@ -177,7 +177,7 @@ test("default reporting shows an inline line only when the inline model changes"
   // Act
   const repeat = await run({ input, agent: "claude", config, deps });
   // Assert
-  assert.equal(first.notice, "· jev-relayer: inline · haiku · 0.90");
+  assert.equal(first.notice, "· jev-relayer: inline · suggests haiku · 0.90");
   assert.equal(repeat, null);
 });
 

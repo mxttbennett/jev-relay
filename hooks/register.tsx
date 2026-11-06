@@ -6,6 +6,7 @@ import { claudeProfileFlags } from '../src/profiles.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { decisionLabel, isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, classifyFields } from '../src/relay.mjs'
+import { appliedNotice } from '../src/nudge.mjs'
 import { allowsInlineSwitch } from '../src/switching.mjs'
 import { isDowngrade, tierOf } from '../src/tiers.mjs'
 import { isCorrection } from '../src/regret.mjs'
@@ -157,9 +158,6 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   const changed = isChange(state.latest, result.verdict)
   state.latest = result.verdict
   if (state.config.macNotifications && changed) void notify($, decisionLabel(result.verdict))
-  const confidence = result.verdict.confidence == null ? '' : ` · ${result.verdict.confidence.toFixed(2)}`
-  const label = [result.verdict.model, result.verdict.effort].filter(Boolean).join(' · ')
-  if (state.config.statusNotice) await $.ui.status(`jev → ${label}${confidence}`)
   return result.verdict
 }
 
@@ -292,6 +290,10 @@ export const register: Register = on => {
     const downgrade = Boolean(model) && isDowngrade(current, model)
     const wanted = decision?.placement === 'inline' ? decision.effort : null
     const effort = wanted && EFFORTS.includes(wanted) && e.effort !== undefined ? wanted : null
+    if (e.index === 0 && state.config.statusNotice && decision && (picked || effort)) {
+      const text = appliedNotice({ current, picked, effort, switched: Boolean(model), blocked: wantsSwitch && !allowed, contextTokens, confidence: decision.confidence })
+      void $.ui.status(text)
+    }
     const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)
     for await (const chunk of stream) {
       if (e.index === 0 && chunk.kind === 'stop') {
