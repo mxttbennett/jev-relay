@@ -186,7 +186,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, isFir
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
-      return `jev-relayer: reply with exactly "[jev-relayer] started a subagent (${started.model}) for this request." and stop; its result arrives when it finishes.`
+      return `jev-relayer: reply with exactly "jev-relayer: started a subagent (${started.model}) for this request." and stop; its result arrives when it finishes.`
     }
     void record($, { event: 'action', placement: 'subagent', outcome: 'delegated-to-model', model })
     return `jev-relayer: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
