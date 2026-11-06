@@ -7,7 +7,6 @@ import {
   DEGRADED_NOTICE,
   buildNotice,
   buildNudge,
-  inlineNotice,
   skipNotice,
 } from "./nudge.mjs";
 import { claudeProfileFlags, profileDescriptions } from "./profiles.mjs";
@@ -153,7 +152,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   });
   deps.state.save(input.session_id, state);
   if (lines.length) return { context: lines.join("\n"), notice: notices.join("\n") };
-  return everyTurn || switchedInline ? { context: "", notice: inlineNotice(result.verdict) } : null;
+  return null;
 }
 
 export async function pickSubagentModel({ input, agent, config, deps }) {

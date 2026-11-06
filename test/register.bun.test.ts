@@ -45,7 +45,7 @@ function engine(scenario: Scenario, verdict: { model: string; effort?: string })
       }),
     },
     clock: { after: () => {} },
-    ui: { status: async (text: string) => void statuses.push(text) },
+    ui: { status: () => {}, log: (text: string) => void statuses.push(text) },
   }
   const records = () =>
     [...files.entries()]
