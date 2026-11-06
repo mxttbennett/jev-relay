@@ -83,7 +83,7 @@ Three pieces share one classifier.
   (terminal, Desktop, VS Code), with no proxy and no `ANTHROPIC_BASE_URL`. Remote Control keeps
   working.
 
-The mod differs from the hook in four ways:
+The mod differs from the hook in these ways:
 
 - It classifies every turn, with no context-size gate.
 - It runs the turn on the model the classifier picks when the verdict is inline. `/model` stops it
@@ -164,11 +164,37 @@ question. The sibling nudge carries the chosen model: `claude --bg --model <name
 
 ### Effort
 
-The same classifier call picks a reasoning effort for the turn (`low`, `medium`, `high` or `xhigh`).
-The mod applies it, along with the model, to inline turns on models that take an effort. The hooks
-ignore it. `efforts` lists the levels the classifier may pick and their descriptions. Set
-`"efforts": {}` to stop asking, or write your own list, which replaces the default. Keys must be
-`low`, `medium`, `high` or `xhigh`; the mod ignores any other level.
+The same classifier call picks a reasoning effort for each turn, next to the model. Effort routing
+keeps a cheap model from over-thinking and a strong model from under-thinking.
+
+| Level | Classifier picks it for |
+| --- | --- |
+| `low` | Mechanical, lookup or clearly specified work. The default |
+| `medium` | Coding or review that weighs options or traces behavior across files |
+| `high` | Hard debugging, design and multi-step reasoning |
+| `xhigh` | The hardest work, where extra reasoning pays off |
+
+Where it applies:
+
+- **Mod, inline verdicts only.** The mod sets the effort on the turn, together with the model, when
+  the session model takes an effort. The effort applies even when a model switch is blocked by the
+  cache rules, so a session can stay on `opus` and still drop to `low`.
+- **Not applied** to subagent or sibling verdicts, to the hooks, to Codex, or to heuristic verdicts,
+  which carry no effort. Verdicts under `minConfidence` are treated as inline with no pick.
+- **Manual override wins.** After you run `/model`, routing stops for that session, effort included.
+
+The verdict line shows the result, for example `jev → haiku · low · 0.90`. `jev-relayer stats` counts
+verdicts by effort, and each `applied` event records the effort asked for and the effort set.
+
+`efforts` holds the levels and their descriptions. Write your own to replace the default, for
+example to retire `xhigh`:
+
+```json
+{ "efforts": { "low": "Quick, specified work", "medium": "Anything that needs thought", "high": "Hard problems" } }
+```
+
+Set `"efforts": {}` to stop asking. Keys must be `low`, `medium`, `high` or `xhigh`; the mod ignores
+any other level.
 
 ### Confidence thresholds
 
@@ -271,6 +297,8 @@ Read the report as a checklist:
 - **Estimated cost**: the mod prices each turn's token usage by the model that served it and compares
   it with the same tokens on the session model. Prices per million tokens are in `pricing` and
   are estimates. Turns logged before this feature have no cache-write count and are left out.
+- **Effort mix**: a router that answers `high` for most turns is not saving anything. Tighten the
+  descriptions in `efforts`.
 - **Downgrades, blocked and regret**: a downgrade is a switch to a cheaper tier. Regret is the share
   of downgrades whose next prompt starts like a correction ("no", "try again", "still failing").
   If regret climbs, loosen the model descriptions in `models`.
