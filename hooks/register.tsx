@@ -292,7 +292,7 @@ export const register: Register = on => {
     const effort = wanted && EFFORTS.includes(wanted) && e.effort !== undefined ? wanted : null
     if (e.index === 0 && state.config.statusNotice && decision && (picked || effort)) {
       const text = appliedNotice({ current, picked, effort, switched: Boolean(model), blocked: wantsSwitch && !allowed, contextTokens, confidence: decision.confidence })
-      void $.ui.status(text)
+      $.ui.log(text)
     }
     const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)
     for await (const chunk of stream) {

@@ -20,12 +20,6 @@ export function buildNotice(verdict) {
 
 export const skipNotice = (why) => `· jev-relayer: skipped · ${why}`;
 
-export function inlineNotice(verdict) {
-  const model = verdict.model ? ` · suggests ${verdict.model}` : "";
-  const confidence = verdict.confidence == null ? "" : ` · ${verdict.confidence.toFixed(2)}`;
-  return `· jev-relayer: inline${model}${confidence}`;
-}
-
 export function appliedNotice({ current, picked, effort, switched, blocked, contextTokens, confidence }) {
   const tail = [effort, confidence == null ? null : confidence.toFixed(2)].filter(Boolean).map((part) => ` · ${part}`).join("");
   if (switched) return `jev → ${picked}${tail}`;
