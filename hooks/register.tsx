@@ -15,7 +15,7 @@ import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
 type Effort = 'low' | 'medium' | 'high'
-type Decision = { placement: string; model: string | null; effort: Effort | null; profile?: string; title?: string; confidence: number | null }
+type Decision = { placement: string; model: string | null; effort: Effort | null; profile?: string; agent?: string; title?: string; confidence: number | null }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -183,14 +183,14 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, p
 async function act($: EngineInterface, prompt: string, decision: Decision, isFirstPrompt: boolean): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
+    const started = await $.agent.spawn({ prompt, model, subagentType: decision.agent ?? 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
       return `jev-relayer: reply with exactly "jev-relayer: started a subagent (${started.model}) for this request." and stop; its result arrives when it finishes.`
     }
     void record($, { event: 'action', placement: 'subagent', outcome: 'delegated-to-model', model })
-    return `jev-relayer: delegate this request to a subagent (model ${model}) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.`
+    return `jev-relayer: delegate this request to a subagent (model ${model}) with the Agent tool, using ${decision.agent ?? 'Explore for read-only searches'}. Do not do the work in this conversation.`
   }
   if (decision.placement !== 'sibling') return null
   if (isFirstPrompt) {
