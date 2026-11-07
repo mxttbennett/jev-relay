@@ -86,6 +86,7 @@ const FACTORIES = {
             model: json.answers?.model_choice?.choice,
             effort: json.answers?.effort_choice?.choice,
             profile: json.answers?.profile_choice?.choice,
+            agent: json.answers?.agent_choice?.choice,
             confidence: json.answers?.placement?.confidence,
           },
           input.models,
